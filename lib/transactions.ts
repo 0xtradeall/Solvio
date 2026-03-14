@@ -27,7 +27,8 @@ export function generatePaymentUrl(
   amount: number,
   currency: Currency,
   toAddress: string,
-  note?: string
+  note?: string,
+  recipientAddress?: string
 ): string {
   const params: Record<string, string> = {
     amount: amount.toString(),
@@ -35,6 +36,7 @@ export function generatePaymentUrl(
     to: toAddress,
   };
   if (note) params.note = note;
+  if (recipientAddress) params.recipient = recipientAddress;
   return `${baseUrl}/pay?${new URLSearchParams(params).toString()}`;
 }
 

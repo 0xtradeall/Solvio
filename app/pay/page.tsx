@@ -144,7 +144,13 @@ function PayPageContent() {
   const currency = (searchParams.get('currency') || 'SOL') as Currency;
   const toAddress = searchParams.get('to') || '';
   const note = searchParams.get('note') || '';
+  const recipient = searchParams.get('recipient') || '';
   const isValid = validateSolanaAddress(toAddress) && validateAmount(amount);
+
+  const isPersonalised = !!recipient && validateSolanaAddress(recipient);
+  const walletMismatch = isPersonalised && connected && publicKey
+    ? publicKey.toBase58() !== recipient
+    : false;
 
   useEffect(() => {
     if (connected && publicKey) {
@@ -233,6 +239,28 @@ function PayPageContent() {
             </div>
           </div>
         </div>
+
+        {/* Personalised banner */}
+        {isPersonalised && (
+          <div className="bg-primary-50 border border-primary-200 rounded-2xl px-4 py-3 flex items-start gap-2.5">
+            <span className="text-lg flex-shrink-0">💜</span>
+            <div>
+              <p className="text-sm font-semibold text-primary-800">This payment request was sent to you personally</p>
+              <p className="text-xs text-primary-600 mt-0.5 font-mono">{recipient.slice(0, 8)}…{recipient.slice(-6)}</p>
+            </div>
+          </div>
+        )}
+
+        {/* Wallet mismatch warning */}
+        {walletMismatch && (
+          <div className="bg-yellow-50 border border-yellow-300 rounded-2xl px-4 py-3 flex items-start gap-2.5">
+            <span className="text-lg flex-shrink-0">⚠️</span>
+            <div>
+              <p className="text-sm font-semibold text-yellow-800">This link was intended for a different wallet</p>
+              <p className="text-xs text-yellow-700 mt-0.5">You can still pay — just make sure you intended to send from this wallet.</p>
+            </div>
+          </div>
+        )}
 
         {!connected ? (
           <div className="space-y-3">

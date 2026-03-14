@@ -1,15 +1,16 @@
 'use client';
 
-import { useState, useCallback, useRef } from 'react';
+import { useState, useCallback, useRef, useEffect } from 'react';
 import { useWallet, useConnection } from '@solana/wallet-adapter-react';
 import { QRCodeSVG } from 'qrcode.react';
-import { Copy, Share2, Download, CheckCircle, Loader2, RefreshCw, ExternalLink } from 'lucide-react';
+import { Copy, Share2, Download, CheckCircle, Loader2, RefreshCw, ExternalLink, Users, X } from 'lucide-react';
 import WalletConnectButton from '@/components/WalletConnectButton';
+import SnsAddressInput from '@/components/SnsAddressInput';
 import { generatePaymentUrl, pollForIncomingPayment, getTransactionExplorerUrl } from '@/lib/transactions';
 import { validateAmount } from '@/lib/validators';
-import { saveReceipt } from '@/lib/storage';
+import { saveReceipt, getContacts } from '@/lib/storage';
 import { generateReceiptPDF } from '@/lib/pdf';
-import { Receipt, Currency } from '@/types';
+import { Receipt, Currency, Contact } from '@/types';
 
 type PollStatus = 'idle' | 'polling' | 'received' | 'timeout';
 
@@ -27,7 +28,44 @@ export default function RequestPage() {
   const [pdfGenerating, setPdfGenerating] = useState(false);
   const pollCancelRef = useRef<boolean>(false);
 
+  const [sendToInput, setSendToInput] = useState('');
+  const [resolvedSendTo, setResolvedSendTo] = useState('');
+  const [showContacts, setShowContacts] = useState(false);
+  const [contacts, setContacts] = useState<Contact[]>([]);
+  const contactsDropdownRef = useRef<HTMLDivElement>(null);
+
   const receiverAddress = publicKey?.toBase58() ?? '';
+
+  useEffect(() => {
+    if (publicKey) setContacts(getContacts(publicKey.toBase58()));
+  }, [publicKey]);
+
+  useEffect(() => {
+    if (!showContacts) return;
+    const handleClickOutside = (e: MouseEvent) => {
+      if (contactsDropdownRef.current && !contactsDropdownRef.current.contains(e.target as Node)) {
+        setShowContacts(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [showContacts]);
+
+  const handleSendToChange = (raw: string, resolved: string) => {
+    setSendToInput(raw);
+    setResolvedSendTo(resolved || (!raw.includes('.') ? raw : ''));
+  };
+
+  const selectContact = (c: Contact) => {
+    setSendToInput(c.snsName || c.address);
+    setResolvedSendTo(c.address);
+    setShowContacts(false);
+  };
+
+  const clearSendTo = () => {
+    setSendToInput('');
+    setResolvedSendTo('');
+  };
 
   const handleGenerate = useCallback(() => {
     if (!validateAmount(amount)) {
@@ -40,7 +78,10 @@ export default function RequestPage() {
     setIncomingTxId(null);
 
     const baseUrl = typeof window !== 'undefined' ? window.location.origin : '';
-    const url = generatePaymentUrl(baseUrl, parseFloat(amount), currency, receiverAddress, note);
+    const url = generatePaymentUrl(
+      baseUrl, parseFloat(amount), currency, receiverAddress, note,
+      resolvedSendTo || undefined
+    );
     setPaymentUrl(url);
 
     const receipt: Receipt = {
@@ -51,12 +92,12 @@ export default function RequestPage() {
       date: new Date().toISOString(),
       note,
       fromAddress: receiverAddress,
-      toAddress: receiverAddress,
+      toAddress: resolvedSendTo || receiverAddress,
     };
     if (publicKey) saveReceipt(publicKey.toBase58(), receipt);
 
     setTimeout(() => startPolling(parseFloat(amount), receiverAddress, receipt.id), 500);
-  }, [amount, currency, note, receiverAddress, publicKey]);
+  }, [amount, currency, note, receiverAddress, resolvedSendTo, publicKey]);
 
   const startPolling = useCallback(async (amt: number, addr: string, receiptId: string) => {
     pollCancelRef.current = false;
@@ -78,22 +119,18 @@ export default function RequestPage() {
           date: new Date().toISOString(),
           note,
           fromAddress: receiverAddress,
-          toAddress: receiverAddress,
+          toAddress: resolvedSendTo || receiverAddress,
           txId,
         };
         saveReceipt(publicKey.toBase58(), updatedReceipt);
         setPdfGenerating(true);
-        try {
-          await generateReceiptPDF(updatedReceipt);
-        } catch (e) {
-          console.error('PDF error:', e);
-        }
+        try { await generateReceiptPDF(updatedReceipt); } catch (e) { console.error('PDF error:', e); }
         setPdfGenerating(false);
       }
     } else {
       setPollStatus('timeout');
     }
-  }, [connection, currency, note, receiverAddress, publicKey]);
+  }, [connection, currency, note, receiverAddress, resolvedSendTo, publicKey]);
 
   const handleCopy = async () => {
     if (!paymentUrl) return;
@@ -137,14 +174,10 @@ export default function RequestPage() {
       date: new Date().toISOString(),
       note,
       fromAddress: receiverAddress,
-      toAddress: receiverAddress,
+      toAddress: resolvedSendTo || receiverAddress,
       txId: incomingTxId ?? undefined,
     };
-    try {
-      await generateReceiptPDF(receipt);
-    } catch (e) {
-      console.error('PDF error:', e);
-    }
+    try { await generateReceiptPDF(receipt); } catch (e) { console.error('PDF error:', e); }
     setPdfGenerating(false);
   };
 
@@ -166,6 +199,8 @@ export default function RequestPage() {
       ) : (
         <>
           <div className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100 space-y-4">
+
+            {/* 1. Receiving Wallet */}
             <div>
               <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5 block">Receiving Wallet</label>
               <div className="bg-gray-50 rounded-xl p-3 text-sm font-mono text-gray-600 break-all border border-gray-100">
@@ -173,6 +208,75 @@ export default function RequestPage() {
               </div>
             </div>
 
+            {/* 2. Send To (optional) */}
+            <div>
+              <div className="flex items-center justify-between mb-1.5">
+                <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Send To (optional)</label>
+                <div className="relative" ref={contactsDropdownRef}>
+                  <button
+                    type="button"
+                    onClick={() => setShowContacts(v => !v)}
+                    className="flex items-center gap-1 text-xs text-primary-600 hover:text-primary-700 font-semibold bg-primary-50 hover:bg-primary-100 px-2.5 py-1 rounded-lg transition-colors"
+                  >
+                    <Users size={12} /> From contacts
+                  </button>
+
+                  {showContacts && (
+                    <div className="absolute right-0 top-full mt-1.5 w-72 bg-white border border-gray-200 rounded-2xl shadow-xl z-50 overflow-hidden">
+                      <div className="px-3 py-2 border-b border-gray-100 flex items-center justify-between">
+                        <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Contacts</span>
+                        <button onClick={() => setShowContacts(false)} className="text-gray-400 hover:text-gray-600">
+                          <X size={14} />
+                        </button>
+                      </div>
+                      {contacts.length === 0 ? (
+                        <div className="px-3 py-4 text-center">
+                          <p className="text-sm text-gray-400">No contacts saved yet</p>
+                        </div>
+                      ) : (
+                        <div className="max-h-56 overflow-y-auto">
+                          {contacts.map(c => (
+                            <button
+                              key={c.id}
+                              onClick={() => selectContact(c)}
+                              className="w-full flex items-center gap-3 px-3 py-2.5 hover:bg-primary-50 transition-colors text-left"
+                            >
+                              <div className="w-8 h-8 rounded-full bg-primary-100 flex items-center justify-center flex-shrink-0 text-primary-700 font-bold text-xs">
+                                {c.nickname.slice(0, 1).toUpperCase()}
+                              </div>
+                              <div className="min-w-0">
+                                <p className="text-sm font-semibold text-gray-900 truncate">{c.nickname}</p>
+                                <p className="text-xs font-mono text-gray-400 truncate">
+                                  {c.snsName || `${c.address.slice(0, 8)}…${c.address.slice(-4)}`}
+                                </p>
+                              </div>
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <SnsAddressInput
+                value={sendToInput}
+                onChange={handleSendToChange}
+              />
+              {sendToInput && (
+                <button
+                  onClick={clearSendTo}
+                  className="mt-1 text-xs text-gray-400 hover:text-gray-600 flex items-center gap-1 transition-colors"
+                >
+                  <X size={11} /> Clear
+                </button>
+              )}
+              <p className="text-xs text-gray-400 mt-1.5 leading-relaxed">
+                Leave empty to share publicly, or specify a recipient to personalise the request.
+              </p>
+            </div>
+
+            {/* 3. Amount */}
             <div>
               <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5 block">Amount</label>
               <div className="flex gap-2">
@@ -206,6 +310,7 @@ export default function RequestPage() {
               {amountError && <p className="text-red-500 text-xs mt-1">{amountError}</p>}
             </div>
 
+            {/* 4. Note */}
             <div>
               <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5 block">Note (optional)</label>
               <textarea
@@ -218,6 +323,7 @@ export default function RequestPage() {
               <p className="text-xs text-gray-400 text-right">{note.length}/200</p>
             </div>
 
+            {/* 5. Generate */}
             <button
               onClick={handleGenerate}
               disabled={!amount || parseFloat(amount) <= 0}
@@ -234,7 +340,14 @@ export default function RequestPage() {
                   <div className="w-8 h-8 bg-primary-100 rounded-lg flex items-center justify-center">
                     <CheckCircle className="text-primary-600" size={18} />
                   </div>
-                  <h2 className="font-bold text-gray-900">Payment Request Ready</h2>
+                  <div>
+                    <h2 className="font-bold text-gray-900">Payment Request Ready</h2>
+                    {resolvedSendTo && (
+                      <p className="text-xs text-primary-600 mt-0.5">
+                        Personalised for {sendToInput !== resolvedSendTo ? sendToInput : `${resolvedSendTo.slice(0, 6)}…${resolvedSendTo.slice(-4)}`}
+                      </p>
+                    )}
+                  </div>
                 </div>
 
                 <div className="flex justify-center py-3 bg-gray-50 rounded-2xl">
