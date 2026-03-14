@@ -7,24 +7,24 @@ import { Zap, Users, FileText, CheckCircle, XCircle, ChevronDown, Mail, Twitter,
 
 const SLIDES = [
   {
-    url: 'https://images.unsplash.com/photo-1414235077428-338989a2e8c0?w=1400&q=80&auto=format&fit=crop',
+    url: '/slide1.jpg',
     alt: 'Friends splitting a restaurant bill with phones',
   },
   {
-    url: 'https://images.unsplash.com/photo-1488459716781-31db52582fe9?w=1400&q=80&auto=format&fit=crop',
-    alt: 'Street market vendor accepting payment',
+    url: '/slide2.jpg',
+    alt: 'Street market vendor accepting mobile payment via QR code',
   },
   {
     url: 'https://images.unsplash.com/photo-1553877522-43269d4ea984?w=1400&q=80&auto=format&fit=crop',
     alt: 'Freelancer sending invoice on laptop',
   },
   {
-    url: 'https://images.unsplash.com/photo-1516979187457-637abb4f9353?w=1400&q=80&auto=format&fit=crop',
-    alt: 'Friends at a cafe looking at a phone',
+    url: '/slide4.jpg',
+    alt: 'Freelancer working on invoice in a cafe',
   },
   {
-    url: 'https://images.unsplash.com/photo-1607082348824-0a96f2a4b9da?w=1400&q=80&auto=format&fit=crop',
-    alt: 'Merchant showing QR code to a customer',
+    url: '/slide5.jpg',
+    alt: 'Solana payment confirmed on mobile phone',
   },
 ];
 
