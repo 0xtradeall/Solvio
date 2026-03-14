@@ -2,23 +2,36 @@ import { Receipt, Contact } from '@/types';
 
 const MAX_RECEIPTS = 50;
 
+function isStorageAvailable(): boolean {
+  if (typeof window === 'undefined') return false;
+  try {
+    const key = '__solvio_test__';
+    window.localStorage.setItem(key, '1');
+    window.localStorage.removeItem(key);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export function getReceiptsKey(walletAddress: string): string {
   return `solvio_receipts_${walletAddress}`;
 }
 
 export function getReceipts(walletAddress: string): Receipt[] {
-  if (typeof window === 'undefined') return [];
+  if (!isStorageAvailable()) return [];
   try {
     const stored = localStorage.getItem(getReceiptsKey(walletAddress));
     if (!stored) return [];
-    return JSON.parse(stored) as Receipt[];
+    const parsed = JSON.parse(stored);
+    return Array.isArray(parsed) ? parsed : [];
   } catch {
     return [];
   }
 }
 
 export function saveReceipt(walletAddress: string, receipt: Receipt): void {
-  if (typeof window === 'undefined') return;
+  if (!isStorageAvailable()) return;
   try {
     const receipts = getReceipts(walletAddress);
     const idx = receipts.findIndex(r => r.id === receipt.id);
@@ -33,7 +46,7 @@ export function saveReceipt(walletAddress: string, receipt: Receipt): void {
 }
 
 export function clearReceipts(walletAddress: string): void {
-  if (typeof window === 'undefined') return;
+  if (!isStorageAvailable()) return;
   try {
     localStorage.removeItem(getReceiptsKey(walletAddress));
   } catch {}
@@ -44,18 +57,19 @@ export function getContactsKey(walletAddress: string): string {
 }
 
 export function getContacts(walletAddress: string): Contact[] {
-  if (typeof window === 'undefined') return [];
+  if (!isStorageAvailable()) return [];
   try {
     const stored = localStorage.getItem(getContactsKey(walletAddress));
     if (!stored) return [];
-    return JSON.parse(stored) as Contact[];
+    const parsed = JSON.parse(stored);
+    return Array.isArray(parsed) ? parsed : [];
   } catch {
     return [];
   }
 }
 
 export function saveContact(walletAddress: string, contact: Contact): void {
-  if (typeof window === 'undefined') return;
+  if (!isStorageAvailable()) return;
   try {
     const contacts = getContacts(walletAddress);
     const idx = contacts.findIndex(c => c.id === contact.id);
@@ -69,7 +83,7 @@ export function saveContact(walletAddress: string, contact: Contact): void {
 }
 
 export function deleteContact(walletAddress: string, contactId: string): void {
-  if (typeof window === 'undefined') return;
+  if (!isStorageAvailable()) return;
   try {
     const contacts = getContacts(walletAddress).filter(c => c.id !== contactId);
     localStorage.setItem(getContactsKey(walletAddress), JSON.stringify(contacts));
@@ -77,7 +91,7 @@ export function deleteContact(walletAddress: string, contactId: string): void {
 }
 
 export function clearContacts(walletAddress: string): void {
-  if (typeof window === 'undefined') return;
+  if (!isStorageAvailable()) return;
   try {
     localStorage.removeItem(getContactsKey(walletAddress));
   } catch {}

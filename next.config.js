@@ -12,16 +12,6 @@ const nextConfig = {
     NEXT_PUBLIC_SOLANA_RPC_URL: 'https://api.devnet.solana.com',
     NEXT_PUBLIC_USDC_MINT: '4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU',
   },
-  experimental: {
-    serverComponentsExternalPackages: [
-      '@solana/web3.js',
-      '@solana/wallet-adapter-base',
-      '@solana/wallet-adapter-react',
-      '@solana/wallet-adapter-phantom',
-      '@bonfida/spl-name-service',
-      'borsh',
-    ],
-  },
   webpack: (config, { isServer, webpack }) => {
     config.resolve.alias = {
       ...config.resolve.alias,
