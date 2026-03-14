@@ -137,14 +137,25 @@ function HeroSection() {
 
   return (
     <section id="home" className="relative min-h-screen flex flex-col items-center justify-center overflow-hidden">
-      {SLIDES.map((slide, i) => (
-        <div key={i} className="absolute inset-0 transition-opacity duration-1000"
-          style={{ opacity: current === i ? 1 : 0 }}>
-          <img src={slide.url} alt={slide.alt}
-            className="w-full h-full object-cover"
-            loading={i === 0 ? 'eager' : 'lazy'} />
-        </div>
-      ))}
+      {SLIDES.map((slide, i) => {
+        const isLast = i === SLIDES.length - 1;
+        return (
+          <div key={i} className="absolute inset-0 transition-opacity duration-1000"
+            style={{ opacity: current === i ? 1 : 0 }}>
+            <img
+              src={slide.url}
+              alt={slide.alt}
+              className="w-full h-full object-cover"
+              loading={i === 0 ? 'eager' : 'lazy'}
+              style={isLast ? { filter: 'blur(2px)', transform: 'scale(1.03)' } : undefined}
+            />
+            {/* Extra dark overlay for last slide so image text doesn't compete with headline */}
+            {isLast && (
+              <div className="absolute inset-0 bg-primary-900/65" />
+            )}
+          </div>
+        );
+      })}
 
       <div className="absolute inset-0 bg-gradient-to-br from-primary-900/80 via-primary-800/70 to-secondary-900/75" />
 
