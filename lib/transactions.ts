@@ -46,8 +46,19 @@ export async function sendPayment(
   receiverAddress: string,
   amount: number,
   currency: Currency,
-  onStatus: (status: TransactionStatus) => void
+  onStatus: (status: TransactionStatus) => void,
+  recipientAddress?: string
 ): Promise<TransactionStatus> {
+  if (recipientAddress && wallet.publicKey) {
+    if (wallet.publicKey.toBase58() !== recipientAddress) {
+      const result: TransactionStatus = {
+        status: 'failed',
+        error: 'WALLET_MISMATCH: This payment link was not intended for your wallet.',
+      };
+      onStatus(result);
+      return result;
+    }
+  }
   if (currency === 'USDC') {
     return sendUSDCPayment(connection, wallet, receiverAddress, amount, onStatus);
   }

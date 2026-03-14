@@ -140,18 +140,45 @@ function PayPageContent() {
   const [txError, setTxError] = useState<string | null>(null);
   const [pdfLoading, setPdfLoading] = useState(false);
   const [wrongNetwork, setWrongNetwork] = useState(false);
+  const [isBlocked, setIsBlocked] = useState(false);
 
   const amount = parseFloat(searchParams.get('amount') || '0');
   const currency = (searchParams.get('currency') || 'SOL') as Currency;
   const toAddress = searchParams.get('to') || '';
   const note = searchParams.get('note') || '';
-  const recipient = searchParams.get('recipient') || '';
-  const isValid = validateSolanaAddress(toAddress) && validateAmount(amount);
 
+  const recipient = (() => {
+    const fromHook = searchParams.get('recipient') || '';
+    if (typeof window !== 'undefined') {
+      const fromWindow = new URLSearchParams(window.location.search).get('recipient') || '';
+      return fromWindow || fromHook;
+    }
+    return fromHook;
+  })();
+
+  const isValid = validateSolanaAddress(toAddress) && validateAmount(amount);
   const isPersonalised = !!recipient && validateSolanaAddress(recipient);
-  const walletMismatch = isPersonalised && connected && publicKey
-    ? publicKey.toBase58() !== recipient
-    : false;
+
+  useEffect(() => {
+    if (connected && publicKey && isPersonalised) {
+      const connectedAddr = publicKey.toBase58();
+      const urlParams = new URLSearchParams(window.location.search);
+      const recipientParam = urlParams.get('recipient') || recipient;
+
+      console.log('[Solvio] /pay enforcement check');
+      console.log('[Solvio] Connected wallet:', connectedAddr);
+      console.log('[Solvio] Recipient param:', recipientParam);
+      console.log('[Solvio] Match:', connectedAddr === recipientParam);
+
+      if (recipientParam && connectedAddr !== recipientParam) {
+        setIsBlocked(true);
+      } else {
+        setIsBlocked(false);
+      }
+    } else {
+      setIsBlocked(false);
+    }
+  }, [connected, publicKey, isPersonalised, recipient]);
 
   useEffect(() => {
     if (connected && publicKey) {
@@ -163,12 +190,24 @@ function PayPageContent() {
 
   const handlePay = async () => {
     if (!publicKey) return;
+
+    const urlParams = new URLSearchParams(window.location.search);
+    const recipientParam = urlParams.get('recipient') || '';
+    if (recipientParam && validateSolanaAddress(recipientParam) && publicKey.toBase58() !== recipientParam) {
+      setTxError('WALLET_MISMATCH: This payment link was not intended for your wallet.');
+      return;
+    }
+
     setTxError(null);
-    const result = await sendPayment(connection, wallet, toAddress, amount, currency, (status) => {
-      setTxStatus(status.status);
-      if (status.signature) setTxId(status.signature);
-      if (status.error) setTxError(status.error);
-    });
+    const result = await sendPayment(
+      connection, wallet, toAddress, amount, currency,
+      (status) => {
+        setTxStatus(status.status);
+        if (status.signature) setTxId(status.signature);
+        if (status.error) setTxError(status.error);
+      },
+      isPersonalised ? recipient : undefined
+    );
     if (result.status === 'confirmed' && result.signature) {
       const receipt: Receipt = {
         id: Date.now().toString(),
@@ -262,7 +301,7 @@ function PayPageContent() {
           </div>
 
         /* ── CASE 2 mismatch: BLOCK payment completely ── */
-        ) : walletMismatch ? (
+        ) : isBlocked ? (
           <div className="bg-red-50 border-2 border-red-200 rounded-2xl p-6 text-center space-y-4">
             <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto">
               <span className="text-3xl">🔒</span>

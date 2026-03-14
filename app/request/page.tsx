@@ -6,6 +6,7 @@ import { QRCodeSVG } from 'qrcode.react';
 import { Copy, Share2, Download, CheckCircle, Loader2, RefreshCw, ExternalLink, Users, X, Lock, Globe } from 'lucide-react';
 import WalletConnectButton from '@/components/WalletConnectButton';
 import SnsAddressInput from '@/components/SnsAddressInput';
+import { isSNSInput } from '@/lib/sns';
 import { generatePaymentUrl, pollForIncomingPayment, getTransactionExplorerUrl } from '@/lib/transactions';
 import { validateAmount } from '@/lib/validators';
 import { saveReceipt, getContacts } from '@/lib/storage';
@@ -30,6 +31,7 @@ export default function RequestPage() {
 
   const [sendToInput, setSendToInput] = useState('');
   const [resolvedSendTo, setResolvedSendTo] = useState('');
+  const [sendToError, setSendToError] = useState('');
   const [showContacts, setShowContacts] = useState(false);
   const [contacts, setContacts] = useState<Contact[]>([]);
   const contactsDropdownRef = useRef<HTMLDivElement>(null);
@@ -53,18 +55,21 @@ export default function RequestPage() {
 
   const handleSendToChange = (raw: string, resolved: string) => {
     setSendToInput(raw);
-    setResolvedSendTo(resolved || (!raw.includes('.') ? raw : ''));
+    setResolvedSendTo(resolved);
+    setSendToError('');
   };
 
   const selectContact = (c: Contact) => {
     setSendToInput(c.snsName || c.address);
     setResolvedSendTo(c.address);
+    setSendToError('');
     setShowContacts(false);
   };
 
   const clearSendTo = () => {
     setSendToInput('');
     setResolvedSendTo('');
+    setSendToError('');
   };
 
   const handleGenerate = useCallback(() => {
@@ -72,16 +77,32 @@ export default function RequestPage() {
       setAmountError('Please enter a valid amount greater than 0');
       return;
     }
+
+    if (sendToInput.trim() && !resolvedSendTo) {
+      setSendToError(
+        isSNSInput(sendToInput)
+          ? 'Waiting for name resolution — please try again in a moment'
+          : 'Enter a valid Solana wallet address or .sol name'
+      );
+      return;
+    }
+
     setAmountError('');
+    setSendToError('');
     pollCancelRef.current = true;
     setPollStatus('idle');
     setIncomingTxId(null);
 
     const baseUrl = typeof window !== 'undefined' ? window.location.origin : '';
+    const recipientParam = resolvedSendTo || undefined;
     const url = generatePaymentUrl(
       baseUrl, parseFloat(amount), currency, receiverAddress, note,
-      resolvedSendTo || undefined
+      recipientParam
     );
+
+    console.log('[Solvio] Generated payment URL:', url);
+    console.log('[Solvio] sendToInput:', sendToInput, '| resolvedSendTo:', resolvedSendTo, '| recipientParam:', recipientParam);
+
     setPaymentUrl(url);
 
     const receipt: Receipt = {
@@ -270,6 +291,9 @@ export default function RequestPage() {
                 >
                   <X size={11} /> Clear
                 </button>
+              )}
+              {sendToError && (
+                <p className="text-red-500 text-xs mt-1">{sendToError}</p>
               )}
               <p className="text-xs text-gray-400 mt-1.5 leading-relaxed">
                 Leave empty to share publicly, or specify a recipient to personalise the request.

@@ -31,34 +31,41 @@ export default function SnsAddressInput({ value, onChange, disabled, error, inpu
       setResolveStatus('idle');
       setResolvedAddr('');
       setResolveError('');
+      onChange(value, '', undefined);
       return;
     }
 
-    if (!isSNSInput(value)) {
-      setResolveStatus('idle');
+    if (isSNSInput(value)) {
+      setResolveStatus('resolving');
       setResolvedAddr('');
       setResolveError('');
-      return;
+      onChange(value, '', undefined);
+
+      debounceRef.current = setTimeout(async () => {
+        try {
+          const addr = await resolveSNSName(value);
+          if (latestValue.current !== value) return;
+          setResolvedAddr(addr);
+          setResolveStatus('resolved');
+          onChange(value, addr, value.trim().toLowerCase());
+        } catch {
+          if (latestValue.current !== value) return;
+          setResolveStatus('error');
+          setResolveError('Name not found. Please check spelling.');
+          onChange(value, '', undefined);
+        }
+      }, 600);
+    } else if (validateSolanaAddress(value.trim())) {
+      setResolveStatus('resolved');
+      setResolvedAddr(value.trim());
+      setResolveError('');
+      onChange(value, value.trim(), undefined);
+    } else {
+      setResolveStatus('error');
+      setResolvedAddr('');
+      setResolveError('Not a valid wallet address or .sol name');
+      onChange(value, '', undefined);
     }
-
-    setResolveStatus('resolving');
-    setResolvedAddr('');
-    setResolveError('');
-
-    debounceRef.current = setTimeout(async () => {
-      try {
-        const addr = await resolveSNSName(value);
-        if (latestValue.current !== value) return;
-        setResolvedAddr(addr);
-        setResolveStatus('resolved');
-        onChange(value, addr, value.trim().toLowerCase());
-      } catch {
-        if (latestValue.current !== value) return;
-        setResolveStatus('error');
-        setResolveError('Name not found. Please check spelling.');
-        onChange(value, '', undefined);
-      }
-    }, 600);
 
     return () => {
       if (debounceRef.current) clearTimeout(debounceRef.current);
@@ -67,21 +74,19 @@ export default function SnsAddressInput({ value, onChange, disabled, error, inpu
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const raw = e.target.value;
-    if (!isSNSInput(raw)) {
-      onChange(raw, raw, undefined);
-    } else {
-      onChange(raw, '', undefined);
-    }
+    onChange(raw, '', undefined);
   };
 
   const borderClass = error || resolveStatus === 'error'
     ? 'border-red-400 bg-red-50'
     : resolveStatus === 'resolved'
     ? 'border-green-400 bg-green-50/30'
+    : resolveStatus === 'resolving'
+    ? 'border-yellow-300'
     : 'border-gray-200 focus:border-primary-400';
 
   const shortAddr = resolvedAddr
-    ? `${resolvedAddr.slice(0, 4)}…${resolvedAddr.slice(-4)}`
+    ? `${resolvedAddr.slice(0, 6)}…${resolvedAddr.slice(-4)}`
     : '';
 
   return (
@@ -96,7 +101,7 @@ export default function SnsAddressInput({ value, onChange, disabled, error, inpu
           className={`w-full border-2 rounded-xl p-2.5 text-sm font-mono focus:outline-none transition-colors disabled:opacity-60 pr-10 ${borderClass} ${inputClassName ?? ''}`}
         />
         {resolveStatus === 'resolving' && (
-          <Loader2 size={15} className="absolute right-3 top-1/2 -translate-y-1/2 animate-spin text-gray-400" />
+          <Loader2 size={15} className="absolute right-3 top-1/2 -translate-y-1/2 animate-spin text-yellow-500" />
         )}
         {resolveStatus === 'resolved' && (
           <CheckCircle2 size={15} className="absolute right-3 top-1/2 -translate-y-1/2 text-green-500" />
@@ -109,7 +114,7 @@ export default function SnsAddressInput({ value, onChange, disabled, error, inpu
       {resolveStatus === 'resolved' && resolvedAddr && (
         <p className="text-green-600 text-xs mt-1 flex items-center gap-1">
           <CheckCircle2 size={11} />
-          Resolved: {shortAddr}
+          {isSNSInput(value) ? `Resolved: ${shortAddr}` : `Valid address: ${shortAddr}`}
         </p>
       )}
       {resolveStatus === 'error' && (
