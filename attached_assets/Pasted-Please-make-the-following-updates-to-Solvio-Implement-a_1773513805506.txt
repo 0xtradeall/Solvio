@@ -1,0 +1,180 @@
+Please make the following updates to Solvio. 
+Implement all of them in one go:
+
+---
+
+1. LANDING PAGE (one-pager with sections)
+
+Create a beautiful, fully responsive one-page marketing 
+website at "/" with smooth scroll navigation between sections:
+
+Section 1 - Hero/Home:
+- Solvio logo: icon (a stylized S combined with a 
+  Solana-inspired diamond/circle shape) + wordmark text
+- Headline: "The Solana Payment App for the Real World"
+- Subheadline: "Request payments, split bills and send 
+  receipts — directly from your phone. No setup. No bank. 
+  Just Solana."
+- Two CTA buttons: "Launch App" → /request and 
+  "Learn More" → smooth scroll to features
+- Auto-playing slideshow with 5 slides using high quality 
+  free Unsplash photos showing:
+  * Friends splitting a restaurant bill with phones
+  * A street market vendor accepting payment
+  * A freelancer sending an invoice on laptop
+  * Friends at a cafe looking at a phone
+  * A merchant showing QR code to a customer
+  Use Unsplash source URLs like: 
+  https://source.unsplash.com/featured/?restaurant,friends,phone
+  https://source.unsplash.com/featured/?market,vendor,payment
+  https://source.unsplash.com/featured/?freelancer,laptop,invoice
+  https://source.unsplash.com/featured/?cafe,friends,mobile
+  https://source.unsplash.com/featured/?merchant,qrcode,payment
+
+Section 2 - Features:
+- 3 feature cards with icons, titles and descriptions:
+  * Request Payment — Generate a payment link or QR code 
+    in seconds. Your client pays with one tap via Phantom.
+  * Split the Bill — Add your friends, enter amounts, 
+    send all payments simultaneously. Live status per person.
+  * PDF Receipts — Every transaction generates a 
+    professional PDF receipt. Download or share via 
+    WhatsApp and email instantly.
+- Same style as solsplit.app features section
+
+Section 3 - Why Solvio?
+- Headline: "Built different. Built for real life."
+- Comparison table with these columns:
+  Solvio | SolSplit | SolTap | NOWPayments
+- Rows:
+  * No hardware needed: ✅ ✅ ❌ ✅
+  * Works at dinner table: ✅ ❌ ❌ ❌
+  * Mobile-first PWA: ✅ ❌ ❌ ❌
+  * Direct wallet-to-wallet: ✅ ❌ ✅ ✅
+  * PDF receipt: ✅ ❌ ❌ ❌
+  * Split + request + receipt: ✅ ❌ ❌ ❌
+  * Zero setup for merchant: ✅ ❌ ❌ ❌
+  * Works offline (coming soon): ✅ ❌ ❌ ❌
+- Solvio column highlighted in purple
+
+Section 4 - Contact & Support:
+- Email: support@solvio.app (mailto link)
+- Twitter/X: @solvioapp
+- Built on Solana badge
+- "Built at Superteam Georgia Hackathon" badge
+- Simple contact form: Name, Email, Message, Send button
+  (use mailto: fallback, no backend needed)
+
+Footer:
+- Solvio logo + tagline
+- Links: Home, Features, Why Solvio, Contact
+- "Built on Solana" + Superteam Georgia badges
+- Version 1.0 MVP
+
+---
+
+2. CONTACTS PAGE (/contacts)
+
+Add a 5th tab to the bottom navigation called "Contacts" 
+with a person/address-book icon.
+
+This page is a manual contact book for frequently used 
+Solana wallet addresses:
+- "Add Contact" button → opens a form with:
+  * Name/nickname (required)
+  * Solana wallet address (required, validated)
+  * Optional note (e.g. "Roommate", "Client - Logo project")
+  * Save button
+- Contact list showing all saved contacts as cards:
+  * Name, shortened wallet address, note
+  * "Send Payment" button → pre-fills the Request tab 
+    with this contact's wallet
+  * "Use in Split" button → adds this contact to the 
+    Split tab participants list
+  * Edit and Delete buttons
+- Contacts stored in localStorage tied to wallet address
+- IMPORTANT: Contacts are NEVER added automatically. 
+  Only when the user manually clicks "Add Contact".
+- Empty state: "No contacts yet. Add frequently used 
+  wallets to save time."
+
+---
+
+3. EMAIL RECEIPT SHARING
+
+Add email sharing to every receipt using EmailJS 
+(free tier, no backend needed):
+- Install emailjs-com library
+- Add "Share via Email" button next to existing 
+  WhatsApp share button on every receipt card
+- Clicking it opens a small modal with:
+  * "To" email address input
+  * Pre-filled subject: "Payment Receipt from Solvio"  
+  * Pre-filled message with transaction details:
+    Amount, currency, date, transaction ID, 
+    Solscan link, optional note
+  * Send button
+- Use EmailJS free public key integration
+- Note: attach PDF is not possible without backend, 
+  so send receipt details as formatted email text instead
+- Add instructions comment in code for user to set up 
+  their own EmailJS account and replace the public key
+
+---
+
+4. NO WALLET DETECTION & ONBOARDING
+
+When a payer opens a payment link (/pay) and has 
+no Phantom wallet detected:
+- Show a friendly "No Wallet Found" screen instead 
+  of the payment form:
+  * Icon + "You need a Solana wallet to pay"
+  * Two options side by side:
+    Option A - "Get Phantom" → links to phantom.app 
+               with description "Most popular, 2 min setup"
+    Option B - "Pay via TipLink" → links to 
+               tiplink.io with description 
+               "No wallet needed, pay with email"
+  * Small text: "Already have a wallet? 
+    Refresh this page after installing."
+
+---
+
+5. NETWORK DETECTION & AUTO-SWITCH
+
+When a payer opens a payment link (/pay):
+- Detect which network the payer's Phantom wallet 
+  is connected to
+- If it doesn't match the app's network (devnet for 
+  now, mainnet in production):
+  * Show a yellow warning banner at the top:
+    "⚠️ Wrong network detected. Solvio requires 
+    Solana Devnet."
+  * Show a button: "Switch to Devnet"
+  * On click: trigger Phantom's network switch request
+  * Once switched: banner disappears, payment form shows
+- Handle the case where Phantom doesn't support 
+  programmatic network switching gracefully:
+  * Show manual instructions: 
+    "Open Phantom → Settings → Developer Settings → 
+    Switch to Devnet"
+
+---
+
+6. DESIGN POLISH FOR THE WHOLE APP
+
+Apply these design improvements to the entire app:
+- Add the Solvio logo (icon + wordmark) to the app 
+  header on all tab pages
+- Make all buttons have smooth hover animations
+- Add subtle loading skeleton screens
+- Add smooth page transition animations between tabs
+- Make the bottom navigation more polished with 
+  active state animations
+- Ensure everything looks perfect on both 
+  iPhone SE (375px) and large Android screens (412px)
+- Add a "Back to Home" link in the app header 
+  that goes to the landing page "/"
+
+After all changes are complete, push everything 
+to GitHub so Vercel auto-deploys.
