@@ -1,0 +1,120 @@
+The wallet address resolution currently only 
+supports .sol domains via Bonfida SNS.
+We need to add support for AllDomains TLDs 
+(.solana, .abc, .bonk, .poor, .glow etc.)
+and Backpack domains (.backpack)
+because the app owner uses tradeall.solana
+
+Please implement the following:
+
+1. INSTALL REQUIRED PACKAGES:
+Install @onsol/tldparser for AllDomains support
+Install @coral-xyz/anchor for Backpack support
+
+2. UPDATED RESOLUTION LOGIC:
+When a user types a name in any wallet address 
+field, detect which type it is and resolve 
+accordingly:
+
+const resolveWalletName = async (input) => {
+
+  // Standard .sol via Bonfida
+  if (input.endsWith('.sol')) {
+    return await resolveSolDomain(input)
+  }
+  
+  // Backpack domains
+  if (input.endsWith('.backpack')) {
+    return await resolveBackpackDomain(input)
+  }
+  
+  // AllDomains TLDs
+  const allDomainsTLDs = [
+    '.solana', '.abc', '.bonk', '.poor', 
+    '.glow', '.saga', '.og', '.crypto', 
+    '.nft', '.wallet', '.x', '.888', 
+    '.dao', '.blockchain'
+  ]
+  
+  const isAllDomains = allDomainsTLDs.some(
+    tld => input.endsWith(tld)
+  )
+  
+  if (isAllDomains) {
+    return await resolveAllDomains(input)
+  }
+  
+  // Not a domain name, treat as raw address
+  return null
+}
+
+3. ALLDOMAINS RESOLUTION:
+Use @onsol/tldparser to resolve AllDomains:
+
+import { TldParser } from '@onsol/tldparser'
+
+const resolveAllDomains = async (domain) => {
+  try {
+    const connection = new Connection(
+      'https://api.mainnet-beta.solana.com'
+    )
+    const parser = new TldParser(connection)
+    const owner = await parser.getOwnerFromDomainTld(domain)
+    if (owner) return owner.toString()
+    return null
+  } catch (error) {
+    console.error('AllDomains resolution failed:', error)
+    return null
+  }
+}
+
+4. BACKPACK RESOLUTION:
+Backpack usernames are resolved via their 
+public API:
+
+const resolveBackpackDomain = async (domain) => {
+  try {
+    const username = domain.replace('.backpack', '')
+    const response = await fetch(
+      'https://xnft-api-server.xnfts.dev/v1/users/fromUsername?username=' + username
+    )
+    const data = await response.json()
+    if (data?.user?.publicKeys) {
+      const solanaKey = data.user.publicKeys.find(
+        k => k.blockchain === 'solana'
+      )
+      if (solanaKey) return solanaKey.publicKey
+    }
+    return null
+  } catch (error) {
+    console.error('Backpack resolution failed:', error)
+    return null
+  }
+}
+
+5. FALLBACK CHAIN:
+Try each resolver in order:
+1st: Primary resolver for detected TLD
+2nd: AllDomains as fallback for unknown TLDs
+3rd: Bonfida as final fallback
+If all fail: show error message
+
+6. UPDATE PLACEHOLDER TEXT:
+Change placeholder on all wallet input fields to:
+"Address, .sol, .solana, .backpack or any SNS name"
+
+7. UPDATE RESOLUTION UI:
+When resolving show specific provider:
+- .sol: "✓ Resolved via Bonfida SNS"
+- .solana/.abc etc: "✓ Resolved via AllDomains"
+- .backpack: "✓ Resolved via Backpack"
+- Failed all: "✗ Name not found on any 
+  name service. Please check spelling or 
+  use wallet address directly."
+
+8. UPDATE DEBOUNCE:
+Keep the 600ms debounce before triggering 
+resolution to avoid too many API calls.
+Show a subtle loading spinner during resolution.
+
+Push to GitHub when done.
