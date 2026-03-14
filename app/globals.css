@@ -31,16 +31,16 @@ input[type='number'] {
 /* Toggled via JS class on <html> when on app pages (not / or /pay)   */
 html.app-page-bg,
 html.app-page-bg body {
-  background-color: #f0eeff;
+  background-color: #e8e4ff;
   background-image:
     /* Purple radial glow — top centre, full viewport width */
-    radial-gradient(ellipse 140% 55% at 50% -5%, rgba(124, 58, 237, 0.14) 0%, transparent 62%),
+    radial-gradient(ellipse 140% 60% at 50% -5%, rgba(109, 40, 217, 0.28) 0%, transparent 65%),
     /* Teal accent — bottom-right corner */
-    radial-gradient(ellipse 70% 45% at 105% 105%, rgba(13, 148, 136, 0.10) 0%, transparent 58%),
+    radial-gradient(ellipse 75% 50% at 105% 108%, rgba(13, 148, 136, 0.22) 0%, transparent 60%),
     /* Soft purple — bottom-left warmth */
-    radial-gradient(ellipse 55% 35% at -10% 90%, rgba(139, 92, 246, 0.08) 0%, transparent 55%),
+    radial-gradient(ellipse 55% 40% at -10% 90%, rgba(139, 92, 246, 0.18) 0%, transparent 58%),
     /* Dot mesh grid */
-    radial-gradient(circle, rgba(124, 58, 237, 0.055) 1px, transparent 1px);
+    radial-gradient(circle, rgba(109, 40, 217, 0.13) 1px, transparent 1px);
   background-size: 100% 100%, 100% 100%, 100% 100%, 28px 28px;
   /* fixed keeps gradients pinned to viewport; local lets dots scroll */
   background-attachment: fixed, fixed, fixed, local;

@@ -15,10 +15,6 @@ const SLIDES = [
     alt: 'Street market vendor accepting mobile payment via QR code',
   },
   {
-    url: 'https://images.unsplash.com/photo-1553877522-43269d4ea984?w=1400&q=80&auto=format&fit=crop',
-    alt: 'Freelancer sending invoice on laptop',
-  },
-  {
     url: '/slide4.jpg',
     alt: 'Freelancer working on invoice in a cafe',
   },
