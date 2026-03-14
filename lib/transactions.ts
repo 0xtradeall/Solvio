@@ -4,13 +4,12 @@ import {
   Transaction,
   SystemProgram,
   LAMPORTS_PER_SOL,
-  sendAndConfirmTransaction,
 } from '@solana/web3.js';
-import { TransactionStatus } from '@/types';
+import { WalletContextState } from '@solana/wallet-adapter-react';
+import { TransactionStatus, Currency } from '@/types';
 import { validateSolanaAddress } from './validators';
 
 export const USDC_MINT_DEVNET = 'Gh9ZwEmdLJ8DscKNTkTqPbNwLNNBjuSzaG9Vp2KGtKJr';
-export const USDC_MINT_MAINNET = 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v';
 
 export function getTransactionExplorerUrl(signature: string): string {
   return `https://solscan.io/tx/${signature}?cluster=devnet`;
@@ -19,27 +18,29 @@ export function getTransactionExplorerUrl(signature: string): string {
 export function generatePaymentUrl(
   baseUrl: string,
   amount: number,
-  currency: 'SOL' | 'USDC',
+  currency: Currency,
   toAddress: string,
   note?: string
 ): string {
-  const params = new URLSearchParams({
+  const params: Record<string, string> = {
     amount: amount.toString(),
     currency,
     to: toAddress,
-    ...(note ? { note } : {}),
-  });
-  return `${baseUrl}/pay?${params.toString()}`;
+  };
+  if (note) params.note = note;
+  return `${baseUrl}/pay?${new URLSearchParams(params).toString()}`;
 }
 
 export async function sendSOLPayment(
   connection: Connection,
-  senderPublicKey: PublicKey,
-  signTransaction: (tx: Transaction) => Promise<Transaction>,
+  wallet: WalletContextState,
   receiverAddress: string,
   amountSOL: number,
   onStatus: (status: TransactionStatus) => void
 ): Promise<TransactionStatus> {
+  if (!wallet.publicKey || !wallet.sendTransaction) {
+    return { status: 'failed', error: 'Wallet not connected' };
+  }
   if (!validateSolanaAddress(receiverAddress)) {
     const result: TransactionStatus = { status: 'failed', error: 'Invalid receiver address' };
     onStatus(result);
@@ -54,19 +55,22 @@ export async function sendSOLPayment(
 
     const transaction = new Transaction().add(
       SystemProgram.transfer({
-        fromPubkey: senderPublicKey,
+        fromPubkey: wallet.publicKey,
         toPubkey: receiverPubkey,
         lamports,
       })
     );
 
-    const { blockhash } = await connection.getLatestBlockhash('confirmed');
+    const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash('confirmed');
     transaction.recentBlockhash = blockhash;
-    transaction.feePayer = senderPublicKey;
+    transaction.feePayer = wallet.publicKey;
 
-    const signed = await signTransaction(transaction);
-    const signature = await connection.sendRawTransaction(signed.serialize());
-    await connection.confirmTransaction(signature, 'confirmed');
+    const signature = await wallet.sendTransaction(transaction, connection);
+
+    await connection.confirmTransaction(
+      { signature, blockhash, lastValidBlockHeight },
+      'confirmed'
+    );
 
     const result: TransactionStatus = { status: 'confirmed', signature };
     onStatus(result);
@@ -77,4 +81,42 @@ export async function sendSOLPayment(
     onStatus(result);
     return result;
   }
+}
+
+export async function pollForIncomingPayment(
+  connection: Connection,
+  toAddress: string,
+  amountSOL: number,
+  timeoutMs = 120000
+): Promise<string | null> {
+  const start = Date.now();
+  const toPubkey = new PublicKey(toAddress);
+
+  while (Date.now() - start < timeoutMs) {
+    try {
+      const sigs = await connection.getSignaturesForAddress(toPubkey, { limit: 5 });
+      for (const sig of sigs) {
+        if (sig.blockTime && sig.blockTime * 1000 > start) {
+          const tx = await connection.getTransaction(sig.signature, {
+            commitment: 'confirmed',
+            maxSupportedTransactionVersion: 0,
+          });
+          if (tx) {
+            const accounts = tx.transaction.message.getAccountKeys ? 
+              tx.transaction.message.getAccountKeys().staticAccountKeys :
+              (tx.transaction.message as any).accountKeys;
+            const toIdx = accounts?.findIndex((k: PublicKey) => k?.toBase58() === toAddress);
+            if (toIdx !== undefined && toIdx >= 0 && tx.meta?.postBalances && tx.meta?.preBalances) {
+              const delta = (tx.meta.postBalances[toIdx] - tx.meta.preBalances[toIdx]) / LAMPORTS_PER_SOL;
+              if (Math.abs(delta - amountSOL) < 0.001) {
+                return sig.signature;
+              }
+            }
+          }
+        }
+      }
+    } catch { }
+    await new Promise(r => setTimeout(r, 3000));
+  }
+  return null;
 }

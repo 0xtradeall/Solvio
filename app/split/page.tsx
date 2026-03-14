@@ -1,144 +1,159 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
 import { useWallet, useConnection } from '@solana/wallet-adapter-react';
-import { Plus, Trash2, AlertCircle, CheckCircle, XCircle, Loader2, RefreshCw } from 'lucide-react';
+import { Plus, Trash2, AlertCircle, CheckCircle, XCircle, Loader2, RefreshCw, Users } from 'lucide-react';
 import WalletConnectButton from '@/components/WalletConnectButton';
 import { validateSolanaAddress, validateAmount } from '@/lib/validators';
 import { sendSOLPayment } from '@/lib/transactions';
 import { saveReceipt } from '@/lib/storage';
 import { generateReceiptPDF } from '@/lib/pdf';
-import { Currency, TxStatus, Participant, Receipt } from '@/types';
+import { Currency, TxStatus, Receipt } from '@/types';
 
-interface ParticipantState extends Participant {
+interface ParticipantState {
+  nickname: string;
+  address: string;
+  customAmount: string;
   addressError: string;
   status: TxStatus | 'idle';
   txId?: string;
-  error?: string;
+  txError?: string;
 }
 
+const makeParticipant = (): ParticipantState => ({
+  nickname: '',
+  address: '',
+  customAmount: '',
+  addressError: '',
+  status: 'idle',
+});
+
 export default function SplitPage() {
-  const { publicKey, connected, signTransaction } = useWallet();
+  const wallet = useWallet();
   const { connection } = useConnection();
+  const { publicKey, connected } = wallet;
 
   const [totalAmount, setTotalAmount] = useState('');
   const [currency, setCurrency] = useState<Currency>('SOL');
   const [description, setDescription] = useState('');
   const [equalSplit, setEqualSplit] = useState(true);
-  const [participants, setParticipants] = useState<ParticipantState[]>([
-    { nickname: '', address: '', amount: undefined, addressError: '', status: 'idle' },
-  ]);
+  const [participants, setParticipants] = useState<ParticipantState[]>([makeParticipant()]);
   const [isSending, setIsSending] = useState(false);
-  const [summary, setSummary] = useState<string | null>(null);
+  const [summary, setSummary] = useState<{ confirmed: number; failed: number; total: number } | null>(null);
   const [totalError, setTotalError] = useState('');
+  const [pdfGenerating, setPdfGenerating] = useState(false);
+  const [showSummaryModal, setShowSummaryModal] = useState(false);
+
+  const total = parseFloat(totalAmount) || 0;
+  const perPerson = equalSplit && participants.length > 0 ? total / participants.length : 0;
+
+  const getShare = useCallback((i: number): number => {
+    if (equalSplit) return perPerson;
+    return parseFloat(participants[i]?.customAmount || '0') || 0;
+  }, [equalSplit, perPerson, participants]);
 
   const addParticipant = () => {
     if (participants.length >= 10) return;
-    setParticipants([...participants, { nickname: '', address: '', amount: undefined, addressError: '', status: 'idle' }]);
+    setParticipants(p => [...p, makeParticipant()]);
   };
 
   const removeParticipant = (index: number) => {
-    setParticipants(participants.filter((_, i) => i !== index));
+    setParticipants(p => p.filter((_, i) => i !== index));
   };
 
-  const updateParticipant = (index: number, field: keyof ParticipantState, value: string | number | undefined) => {
-    const updated = [...participants];
-    (updated[index] as any)[field] = value;
-    if (field === 'address') {
-      const addr = value as string;
-      if (addr && !validateSolanaAddress(addr)) {
-        updated[index].addressError = 'Invalid Solana address';
-      } else {
-        updated[index].addressError = '';
+  const updateParticipant = (index: number, field: keyof ParticipantState, value: string) => {
+    setParticipants(prev => {
+      const next = [...prev];
+      (next[index] as any)[field] = value;
+      if (field === 'address') {
+        next[index].addressError = value && !validateSolanaAddress(value)
+          ? 'Invalid Solana address (must be base58, 32–44 chars)'
+          : '';
       }
-    }
-    setParticipants(updated);
-  };
-
-  const getShare = (index: number): number => {
-    const total = parseFloat(totalAmount) || 0;
-    if (equalSplit) return total / participants.length;
-    return participants[index].amount || 0;
+      return next;
+    });
   };
 
   const validateAll = (): boolean => {
     let valid = true;
     if (!validateAmount(totalAmount)) {
-      setTotalError('Enter a valid total amount');
+      setTotalError('Enter a valid total amount greater than 0');
       valid = false;
     } else {
       setTotalError('');
     }
 
-    const updated = [...participants];
-    updated.forEach((p, i) => {
-      if (!p.address || !validateSolanaAddress(p.address)) {
-        updated[i].addressError = 'Invalid Solana address';
-        valid = false;
-      }
-      if (!equalSplit && (!p.amount || p.amount <= 0)) {
-        valid = false;
-      }
+    const updated = participants.map(p => {
+      const addrErr = !p.address
+        ? 'Wallet address is required'
+        : !validateSolanaAddress(p.address)
+          ? 'Invalid Solana address'
+          : '';
+      if (addrErr) valid = false;
+      return { ...p, addressError: addrErr };
     });
+    setParticipants(updated);
 
     if (!equalSplit) {
-      const sum = participants.reduce((acc, p) => acc + (p.amount || 0), 0);
-      const total = parseFloat(totalAmount) || 0;
-      if (Math.abs(sum - total) > 0.0001) {
-        setTotalError(`Custom amounts sum (${sum}) must equal total (${total})`);
+      const sum = participants.reduce((acc, p) => acc + (parseFloat(p.customAmount) || 0), 0);
+      if (Math.abs(sum - total) > 0.000001) {
+        setTotalError(`Custom amounts (${sum.toFixed(4)}) must equal total (${total})`);
         valid = false;
       }
     }
 
-    setParticipants(updated);
     return valid;
   };
 
-  const handleSendAll = async () => {
-    if (!publicKey || !signTransaction) return;
-    if (!validateAll()) return;
-
+  const sendAll = async () => {
+    if (!publicKey || !validateAll()) return;
     setIsSending(true);
     setSummary(null);
+    setShowSummaryModal(false);
 
-    const updated = [...participants];
-    const promises = participants.map(async (p, i) => {
-      if (p.status === 'confirmed') return;
-      updated[i] = { ...updated[i], status: 'pending' };
-      setParticipants([...updated]);
+    const results: ParticipantState[] = [...participants];
 
-      const share = getShare(i);
-      const result = await sendSOLPayment(
-        connection,
-        publicKey,
-        signTransaction,
-        p.address,
-        share,
-        (status) => {
-          updated[i] = { ...updated[i], status: status.status, txId: status.signature, error: status.error };
-          setParticipants([...updated]);
-        }
-      );
-      return result;
-    });
+    await Promise.allSettled(
+      participants.map(async (p, i) => {
+        if (p.status === 'confirmed') return;
+        results[i] = { ...results[i], status: 'pending', txId: undefined, txError: undefined };
+        setParticipants([...results]);
 
-    await Promise.allSettled(promises);
+        const share = getShare(i);
+        const result = await sendSOLPayment(
+          connection,
+          wallet,
+          p.address,
+          share,
+          (s) => {
+            results[i] = {
+              ...results[i],
+              status: s.status,
+              txId: s.signature,
+              txError: s.error,
+            };
+            setParticipants([...results]);
+          }
+        );
+      })
+    );
 
-    const confirmed = updated.filter(p => p.status === 'confirmed').length;
-    const failed = updated.filter(p => p.status === 'failed').length;
-    setSummary(`${confirmed}/${participants.length} payments confirmed${failed > 0 ? `, ${failed} failed` : ''}`);
+    const confirmed = results.filter(p => p.status === 'confirmed').length;
+    const failed = results.filter(p => p.status === 'failed').length;
+    setSummary({ confirmed, failed, total: participants.length });
+    setShowSummaryModal(true);
 
     if (confirmed > 0 && publicKey) {
       const receipt: Receipt = {
         id: Date.now().toString(),
         type: 'split',
-        amount: parseFloat(totalAmount),
+        amount: total,
         currency,
         date: new Date().toISOString(),
         note: description,
         fromAddress: publicKey.toBase58(),
         toAddress: 'multiple',
-        participants: updated.map((p, i) => ({
+        participants: results.map((p, i) => ({
           nickname: p.nickname || `Person ${i + 1}`,
           address: p.address,
           amount: getShare(i),
@@ -152,75 +167,116 @@ export default function SplitPage() {
     setIsSending(false);
   };
 
-  const handleRetry = async (index: number) => {
-    if (!publicKey || !signTransaction) return;
+  const retryOne = async (index: number) => {
+    if (!publicKey) return;
     const p = participants[index];
-    const updated = [...participants];
-    updated[index] = { ...updated[index], status: 'pending', error: undefined };
-    setParticipants(updated);
+    setParticipants(prev => {
+      const next = [...prev];
+      next[index] = { ...next[index], status: 'pending', txId: undefined, txError: undefined };
+      return next;
+    });
 
     const share = getShare(index);
-    await sendSOLPayment(
-      connection,
-      publicKey,
-      signTransaction,
-      p.address,
-      share,
-      (status) => {
-        updated[index] = { ...updated[index], status: status.status, txId: status.signature, error: status.error };
-        setParticipants([...updated]);
-      }
-    );
+    await sendSOLPayment(connection, wallet, p.address, share, (s) => {
+      setParticipants(prev => {
+        const next = [...prev];
+        next[index] = { ...next[index], status: s.status, txId: s.signature, txError: s.error };
+        return next;
+      });
+    });
   };
 
-  const getStatusIcon = (status: TxStatus | 'idle') => {
-    if (status === 'pending') return <Loader2 size={16} className="animate-spin text-yellow-500" />;
-    if (status === 'confirmed') return <CheckCircle size={16} className="text-green-500" />;
-    if (status === 'failed') return <XCircle size={16} className="text-red-500" />;
+  const handleDownloadPDF = async () => {
+    if (!publicKey) return;
+    const receipt: Receipt = {
+      id: Date.now().toString(),
+      type: 'split',
+      amount: total,
+      currency,
+      date: new Date().toISOString(),
+      note: description,
+      fromAddress: publicKey.toBase58(),
+      toAddress: 'multiple',
+      participants: participants.map((p, i) => ({
+        nickname: p.nickname || `Person ${i + 1}`,
+        address: p.address,
+        amount: getShare(i),
+        status: p.status === 'idle' ? 'pending' : p.status,
+        txId: p.txId,
+      })),
+    };
+    setPdfGenerating(true);
+    try { await generateReceiptPDF(receipt); } catch (e) { console.error(e); }
+    setPdfGenerating(false);
+  };
+
+  const statusBadge = (status: TxStatus | 'idle') => {
+    if (status === 'pending') return <span className="flex items-center gap-1 text-xs font-semibold text-yellow-700 bg-yellow-100 px-2 py-0.5 rounded-full"><Loader2 size={11} className="animate-spin" />Pending</span>;
+    if (status === 'confirmed') return <span className="flex items-center gap-1 text-xs font-semibold text-green-700 bg-green-100 px-2 py-0.5 rounded-full"><CheckCircle size={11} />Confirmed</span>;
+    if (status === 'failed') return <span className="flex items-center gap-1 text-xs font-semibold text-red-700 bg-red-100 px-2 py-0.5 rounded-full"><XCircle size={11} />Failed</span>;
     return null;
   };
 
-  const getStatusBg = (status: TxStatus | 'idle') => {
-    if (status === 'pending') return 'bg-yellow-50 border-yellow-200';
-    if (status === 'confirmed') return 'bg-green-50 border-green-200';
-    if (status === 'failed') return 'bg-red-50 border-red-200';
-    return 'bg-white border-gray-200';
+  const cardBorder = (status: TxStatus | 'idle') => {
+    if (status === 'confirmed') return 'border-green-200 bg-green-50/30';
+    if (status === 'failed') return 'border-red-200 bg-red-50/30';
+    if (status === 'pending') return 'border-yellow-200 bg-yellow-50/30';
+    return 'border-gray-200 bg-white';
   };
 
-  const canSend = participants.length > 0 && !isSending && participants.every(p => !p.addressError && p.address);
+  const hasSendable = participants.length > 0 && !isSending && participants.some(p => p.status !== 'confirmed' && !p.addressError && p.address);
+  const anyDone = participants.some(p => p.status === 'confirmed' || p.status === 'failed');
 
   return (
-    <div className="p-4 space-y-6">
+    <div className="p-4 space-y-5 pb-20">
       <div className="pt-4">
         <h1 className="text-2xl font-bold text-gray-900">Split the Bill</h1>
-        <p className="text-sm text-gray-500 mt-1">Split payments across multiple wallets</p>
+        <p className="text-sm text-gray-500 mt-0.5">Pay multiple people simultaneously</p>
       </div>
 
       {!connected ? (
         <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100 text-center space-y-4">
           <div className="w-16 h-16 bg-primary-50 rounded-full flex items-center justify-center mx-auto">
-            <span className="text-3xl">👥</span>
+            <Users className="text-primary-400" size={28} />
           </div>
           <p className="text-gray-600 font-medium">Connect your wallet to split bills</p>
           <WalletConnectButton />
         </div>
       ) : (
         <>
+          {showSummaryModal && summary && (
+            <div className={`rounded-2xl p-4 border flex items-start gap-3 ${
+              summary.failed > 0 ? 'bg-yellow-50 border-yellow-200' : 'bg-green-50 border-green-200'
+            }`}>
+              <div className="flex-1">
+                <p className={`font-bold ${summary.failed > 0 ? 'text-yellow-800' : 'text-green-800'}`}>
+                  {summary.failed > 0 ? '⚠️ Partial Success' : '✅ All Payments Sent'}
+                </p>
+                <p className={`text-sm mt-0.5 ${summary.failed > 0 ? 'text-yellow-700' : 'text-green-700'}`}>
+                  {summary.confirmed}/{summary.total} confirmed{summary.failed > 0 ? `, ${summary.failed} failed` : ''}
+                  {summary.failed > 0 && ' — use Retry buttons below'}
+                </p>
+                {summary.confirmed > 0 && <p className="text-xs mt-0.5 text-gray-500">Confirmed payments cannot be undone.</p>}
+              </div>
+              <button onClick={() => setShowSummaryModal(false)} className="text-gray-400 hover:text-gray-600 text-lg leading-none">×</button>
+            </div>
+          )}
+
           <div className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100 space-y-4">
             <div>
-              <label className="text-sm font-medium text-gray-700 mb-1 block">Description</label>
+              <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5 block">Description</label>
               <input
                 type="text"
                 value={description}
                 onChange={e => setDescription(e.target.value)}
-                placeholder="e.g., Dinner at restaurant"
+                placeholder="e.g., Dinner at Nobu, Team lunch..."
                 disabled={isSending}
-                className="w-full border border-gray-200 rounded-xl p-3 focus:outline-none focus:ring-2 focus:ring-primary-500 disabled:opacity-60"
+                className="w-full border-2 border-gray-200 focus:border-primary-400 rounded-xl p-3 focus:outline-none transition-colors disabled:opacity-60"
               />
             </div>
 
             <div>
-              <label className="text-sm font-medium text-gray-700 mb-1 block">Total Amount</label>
+              <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5 block">Total Amount</label>
               <div className="flex gap-2">
                 <input
                   type="number"
@@ -230,83 +286,72 @@ export default function SplitPage() {
                   min="0"
                   step="any"
                   disabled={isSending}
-                  className={`flex-1 border rounded-xl p-3 text-lg font-semibold focus:outline-none focus:ring-2 focus:ring-primary-500 disabled:opacity-60 ${totalError ? 'border-red-400' : 'border-gray-200'}`}
+                  className={`flex-1 border-2 rounded-xl p-3 text-xl font-bold focus:outline-none transition-colors disabled:opacity-60 ${
+                    totalError ? 'border-red-400 bg-red-50' : 'border-gray-200 focus:border-primary-400'
+                  }`}
                 />
-                <div className="flex bg-gray-100 rounded-xl p-1">
+                <div className="flex bg-gray-100 rounded-xl p-1 gap-1">
                   {(['SOL', 'USDC'] as Currency[]).map((c) => (
-                    <button
-                      key={c}
-                      onClick={() => setCurrency(c)}
-                      disabled={isSending}
-                      className={`px-3 py-2 rounded-lg text-sm font-semibold transition-colors ${currency === c ? 'bg-white shadow text-primary-600' : 'text-gray-500'}`}
-                    >
+                    <button key={c} onClick={() => setCurrency(c)} disabled={isSending}
+                      className={`px-4 py-2 rounded-lg text-sm font-bold transition-all ${currency === c ? 'bg-white shadow-sm text-primary-600 ring-1 ring-primary-200' : 'text-gray-500'}`}>
                       {c}
                     </button>
                   ))}
                 </div>
               </div>
-              {totalError && <p className="text-red-500 text-xs mt-1 flex items-center gap-1"><AlertCircle size={12} /> {totalError}</p>}
+              {totalError && <p className="text-red-500 text-xs mt-1 flex items-center gap-1"><AlertCircle size={11}/>{totalError}</p>}
             </div>
 
             <div className="flex items-center gap-3">
-              <span className="text-sm font-medium text-gray-700">Split type:</span>
-              <div className="flex bg-gray-100 rounded-xl p-1">
-                <button
-                  onClick={() => setEqualSplit(true)}
-                  disabled={isSending}
-                  className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${equalSplit ? 'bg-white shadow text-primary-600' : 'text-gray-500'}`}
-                >
+              <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Split type</span>
+              <div className="flex bg-gray-100 rounded-xl p-1 gap-1">
+                <button onClick={() => setEqualSplit(true)} disabled={isSending}
+                  className={`px-3 py-1.5 rounded-lg text-sm font-semibold transition-all ${equalSplit ? 'bg-white shadow-sm text-primary-600' : 'text-gray-500'}`}>
                   Equal
                 </button>
-                <button
-                  onClick={() => setEqualSplit(false)}
-                  disabled={isSending}
-                  className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${!equalSplit ? 'bg-white shadow text-primary-600' : 'text-gray-500'}`}
-                >
+                <button onClick={() => setEqualSplit(false)} disabled={isSending}
+                  className={`px-3 py-1.5 rounded-lg text-sm font-semibold transition-all ${!equalSplit ? 'bg-white shadow-sm text-primary-600' : 'text-gray-500'}`}>
                   Custom
                 </button>
               </div>
+              {equalSplit && total > 0 && participants.length > 0 && (
+                <span className="text-xs text-gray-500 ml-auto">
+                  {perPerson.toFixed(4)} {currency} each
+                </span>
+              )}
             </div>
           </div>
 
           <div className="space-y-3">
             <div className="flex items-center justify-between">
-              <h2 className="font-semibold text-gray-900">Participants ({participants.length}/10)</h2>
+              <h2 className="font-bold text-gray-900">Participants <span className="text-gray-400 font-normal text-sm">({participants.length}/10)</span></h2>
               <button
                 onClick={addParticipant}
                 disabled={participants.length >= 10 || isSending}
-                className="flex items-center gap-1 text-primary-600 hover:text-primary-700 font-medium text-sm disabled:opacity-40"
+                className="flex items-center gap-1 text-primary-600 hover:text-primary-700 font-semibold text-sm disabled:opacity-40 transition-colors"
               >
-                <Plus size={16} />
-                Add Person
+                <Plus size={16} /> Add Person
               </button>
             </div>
 
             {participants.map((p, i) => (
-              <div key={i} className={`rounded-2xl p-4 border space-y-3 transition-colors ${getStatusBg(p.status)}`}>
+              <div key={i} className={`rounded-2xl p-4 border-2 space-y-3 transition-all ${cardBorder(p.status)}`}>
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
-                    <div className="w-7 h-7 bg-primary-100 rounded-full flex items-center justify-center text-primary-600 font-bold text-xs">
+                    <div className="w-7 h-7 bg-primary-100 rounded-full flex items-center justify-center text-primary-700 font-bold text-xs flex-shrink-0">
                       {i + 1}
                     </div>
-                    {getStatusIcon(p.status)}
-                    <span className="text-xs font-medium text-gray-500 capitalize">
-                      {p.status !== 'idle' ? p.status : ''}
-                    </span>
+                    {statusBadge(p.status)}
                   </div>
                   <div className="flex items-center gap-2">
-                    {p.status === 'failed' && (
-                      <button
-                        onClick={() => handleRetry(i)}
-                        disabled={isSending}
-                        className="flex items-center gap-1 bg-red-100 hover:bg-red-200 text-red-600 text-xs font-medium px-2 py-1 rounded-lg"
-                      >
-                        <RefreshCw size={12} />
-                        Retry
+                    {p.status === 'failed' && !isSending && (
+                      <button onClick={() => retryOne(i)}
+                        className="flex items-center gap-1 bg-red-100 hover:bg-red-200 text-red-700 text-xs font-semibold px-2.5 py-1.5 rounded-lg transition-colors">
+                        <RefreshCw size={11} /> Retry
                       </button>
                     )}
-                    {participants.length > 1 && !isSending && (
-                      <button onClick={() => removeParticipant(i)} className="text-gray-400 hover:text-red-500 transition-colors">
+                    {participants.length > 1 && !isSending && p.status !== 'confirmed' && (
+                      <button onClick={() => removeParticipant(i)} className="text-gray-300 hover:text-red-400 transition-colors">
                         <Trash2 size={16} />
                       </button>
                     )}
@@ -317,9 +362,9 @@ export default function SplitPage() {
                   type="text"
                   value={p.nickname}
                   onChange={e => updateParticipant(i, 'nickname', e.target.value)}
-                  placeholder="Nickname"
+                  placeholder="Name or nickname"
                   disabled={isSending || p.status === 'confirmed'}
-                  className="w-full border border-gray-200 rounded-xl p-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 disabled:opacity-60"
+                  className="w-full border-2 border-gray-200 focus:border-primary-400 rounded-xl p-2.5 text-sm focus:outline-none transition-colors disabled:opacity-60"
                 />
 
                 <div>
@@ -327,62 +372,77 @@ export default function SplitPage() {
                     type="text"
                     value={p.address}
                     onChange={e => updateParticipant(i, 'address', e.target.value)}
-                    placeholder="Solana wallet address"
+                    placeholder="Solana wallet address (base58)"
                     disabled={isSending || p.status === 'confirmed'}
-                    className={`w-full border rounded-xl p-3 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-primary-500 disabled:opacity-60 ${p.addressError ? 'border-red-400 bg-red-50' : 'border-gray-200'}`}
+                    className={`w-full border-2 rounded-xl p-2.5 text-sm font-mono focus:outline-none transition-colors disabled:opacity-60 ${
+                      p.addressError ? 'border-red-400 bg-red-50 focus:border-red-400' : 'border-gray-200 focus:border-primary-400'
+                    }`}
                   />
-                  {p.addressError && <p className="text-red-500 text-xs mt-1 flex items-center gap-1"><AlertCircle size={11} /> {p.addressError}</p>}
+                  {p.addressError && (
+                    <p className="text-red-500 text-xs mt-1 flex items-center gap-1">
+                      <AlertCircle size={11} /> {p.addressError}
+                    </p>
+                  )}
                 </div>
 
                 {!equalSplit && (
                   <input
                     type="number"
-                    value={p.amount || ''}
-                    onChange={e => updateParticipant(i, 'amount', parseFloat(e.target.value))}
-                    placeholder={`Amount (${currency})`}
+                    value={p.customAmount}
+                    onChange={e => updateParticipant(i, 'customAmount', e.target.value)}
+                    placeholder={`Amount in ${currency}`}
                     min="0"
                     step="any"
                     disabled={isSending || p.status === 'confirmed'}
-                    className="w-full border border-gray-200 rounded-xl p-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 disabled:opacity-60"
+                    className="w-full border-2 border-gray-200 focus:border-primary-400 rounded-xl p-2.5 text-sm focus:outline-none transition-colors disabled:opacity-60"
                   />
                 )}
 
-                {totalAmount && equalSplit && (
-                  <p className="text-xs text-gray-500">
-                    Share: <span className="font-semibold text-primary-600">{(getShare(i)).toFixed(6)} {currency}</span>
+                {equalSplit && total > 0 && (
+                  <p className="text-xs text-gray-400">
+                    Share: <span className="font-bold text-primary-600">{perPerson.toFixed(6)} {currency}</span>
                   </p>
                 )}
 
                 {p.txId && (
-                  <p className="text-xs text-green-600 break-all">
-                    Tx: <a href={`https://solscan.io/tx/${p.txId}?cluster=devnet`} target="_blank" rel="noopener noreferrer" className="underline">{p.txId.slice(0, 20)}...</a>
-                  </p>
+                  <a
+                    href={`https://solscan.io/tx/${p.txId}?cluster=devnet`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-xs text-secondary-600 underline break-all flex items-center gap-1"
+                  >
+                    <CheckCircle size={11} />
+                    Tx: {p.txId.slice(0, 24)}...
+                  </a>
                 )}
 
-                {p.error && <p className="text-xs text-red-500">{p.error}</p>}
+                {p.txError && (
+                  <p className="text-xs text-red-500 bg-red-50 rounded-lg p-2">{p.txError}</p>
+                )}
               </div>
             ))}
           </div>
 
-          {summary && (
-            <div className={`rounded-2xl p-4 text-sm font-medium ${summary.includes('failed') ? 'bg-yellow-50 text-yellow-800 border border-yellow-200' : 'bg-green-50 text-green-800 border border-green-200'}`}>
-              {summary.includes('failed') ? '⚠️' : '✅'} {summary}
-              {summary.includes('failed') && <span className="block text-xs font-normal mt-1">Confirmed transactions cannot be undone.</span>}
-            </div>
+          {anyDone && (
+            <button
+              onClick={handleDownloadPDF}
+              disabled={pdfGenerating}
+              className="w-full flex items-center justify-center gap-2 border-2 border-primary-200 text-primary-600 hover:bg-primary-50 font-semibold py-3.5 rounded-xl transition-colors"
+            >
+              {pdfGenerating ? <Loader2 size={16} className="animate-spin" /> : null}
+              {pdfGenerating ? 'Generating PDF...' : 'Download Group Receipt PDF'}
+            </button>
           )}
 
           <button
-            onClick={handleSendAll}
-            disabled={!canSend}
-            className="w-full bg-primary-500 hover:bg-primary-600 disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold py-4 rounded-2xl transition-colors flex items-center justify-center gap-2 min-h-[52px]"
+            onClick={sendAll}
+            disabled={!hasSendable || !totalAmount || parseFloat(totalAmount) <= 0}
+            className="w-full bg-primary-500 hover:bg-primary-600 active:bg-primary-700 disabled:opacity-40 disabled:cursor-not-allowed text-white font-bold py-4 rounded-2xl transition-colors flex items-center justify-center gap-2 text-base shadow-sm shadow-primary-200"
           >
             {isSending ? (
-              <>
-                <Loader2 size={18} className="animate-spin" />
-                Sending Payments...
-              </>
+              <><Loader2 size={18} className="animate-spin" /> Sending Payments…</>
             ) : (
-              `Send All Payments (${participants.length})`
+              `Send All ${participants.length} Payment${participants.length !== 1 ? 's' : ''}`
             )}
           </button>
         </>

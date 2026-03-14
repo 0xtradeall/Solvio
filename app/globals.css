@@ -1,18 +1,29 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
-
 body {
-  font-family: 'Inter', system-ui, sans-serif;
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
   background-color: #f8fafc;
   -webkit-tap-highlight-color: transparent;
+  overscroll-behavior: none;
 }
 
 * {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  box-sizing: border-box;
+}
+
+input[type='number']::-webkit-outer-spin-button,
+input[type='number']::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+input[type='number'] {
+  -moz-appearance: textfield;
 }
 
 .wallet-adapter-button {
@@ -20,13 +31,32 @@ body {
   border-radius: 12px !important;
   font-family: 'Inter', system-ui, sans-serif !important;
   font-weight: 600 !important;
+  min-height: 44px !important;
+}
+
+.wallet-adapter-button:hover {
+  background-color: #6d28d9 !important;
 }
 
 .wallet-adapter-modal-wrapper {
   background-color: #ffffff !important;
-  border-radius: 16px !important;
+  border-radius: 20px !important;
 }
 
 .wallet-adapter-modal-title {
+  color: #7c3aed !important;
+  font-family: 'Inter', system-ui, sans-serif !important;
+  font-weight: 700 !important;
+}
+
+.wallet-adapter-modal-list {
+  padding: 0 !important;
+}
+
+.wallet-adapter-modal-list li {
+  border-radius: 12px !important;
+}
+
+.wallet-adapter-modal-list-more-button {
   color: #7c3aed !important;
 }

@@ -1,103 +1,157 @@
 import { Receipt } from '@/types';
 import { getTransactionExplorerUrl } from './transactions';
+import { format } from 'date-fns';
+
+const PURPLE: [number, number, number] = [124, 58, 237];
+const TEAL: [number, number, number] = [13, 148, 136];
+const DARK: [number, number, number] = [17, 24, 39];
+const GRAY: [number, number, number] = [107, 114, 128];
+const LIGHT_GRAY: [number, number, number] = [249, 250, 251];
 
 export async function generateReceiptPDF(receipt: Receipt): Promise<void> {
-  const { jsPDF } = await import('jspdf');
+  const { jsPDF } = (await import('jspdf')) as any;
+  const autoTable = (await import('jspdf-autotable')).default;
+
   const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+  const pageW = doc.internal.pageSize.getWidth();
 
-  const purple = [124, 58, 237] as [number, number, number];
-  const teal = [13, 148, 136] as [number, number, number];
-  const dark = [30, 30, 30] as [number, number, number];
-  const gray = [120, 120, 120] as [number, number, number];
+  doc.setFillColor(...PURPLE);
+  doc.rect(0, 0, pageW, 32, 'F');
 
-  doc.setFillColor(...purple);
-  doc.rect(0, 0, 210, 28, 'F');
-
-  doc.setFontSize(20);
+  doc.setFontSize(22);
   doc.setTextColor(255, 255, 255);
   doc.setFont('helvetica', 'bold');
   doc.text('SOLVIO', 14, 14);
 
-  doc.setFontSize(10);
+  doc.setFontSize(9);
   doc.setFont('helvetica', 'normal');
   doc.text('Solana Payment Hub', 14, 21);
 
-  const receiptLabel = receipt.type === 'split' ? 'Split Receipt' : 'Payment Receipt';
-  doc.setFontSize(12);
-  doc.setFont('helvetica', 'bold');
-  doc.setTextColor(...dark);
-  doc.text(receiptLabel, 14, 40);
-
   doc.setFontSize(9);
+  doc.setTextColor(200, 185, 255);
+  doc.text('Powered by Solana Devnet', pageW - 14, 18, { align: 'right' });
+
+  const titleY = 42;
+  const receiptLabel = receipt.type === 'split' ? 'Bill Split Receipt' : 'Payment Receipt';
+  doc.setFontSize(16);
+  doc.setFont('helvetica', 'bold');
+  doc.setTextColor(...DARK);
+  doc.text(receiptLabel, 14, titleY);
+
+  doc.setFontSize(8);
   doc.setFont('helvetica', 'normal');
-  doc.setTextColor(...gray);
-  doc.text(`Receipt ID: ${receipt.id}`, 14, 47);
-  doc.text(`Date: ${new Date(receipt.date).toLocaleString()}`, 14, 53);
+  doc.setTextColor(...GRAY);
+  doc.text(`ID: ${receipt.id}`, 14, titleY + 6);
+  doc.text(format(new Date(receipt.date), 'MMM d, yyyy · h:mm a'), pageW - 14, titleY + 6, { align: 'right' });
 
-  doc.setDrawColor(...teal);
-  doc.setLineWidth(0.5);
-  doc.line(14, 57, 196, 57);
+  doc.setDrawColor(...TEAL);
+  doc.setLineWidth(0.8);
+  doc.line(14, titleY + 10, pageW - 14, titleY + 10);
 
-  let y = 65;
-  doc.setFontSize(10);
-  doc.setTextColor(...dark);
+  const summaryRows: [string, string][] = [
+    ['Amount', `${receipt.amount} ${receipt.currency}`],
+    ['Type', receipt.type === 'split' ? 'Bill Split' : 'Payment Request'],
+    ['Date', format(new Date(receipt.date), 'MMMM d, yyyy')],
+    ['Time', format(new Date(receipt.date), 'h:mm:ss a')],
+  ];
 
-  const addRow = (label: string, value: string) => {
-    doc.setFont('helvetica', 'bold');
-    doc.setTextColor(...gray);
-    doc.text(label, 14, y);
-    doc.setFont('helvetica', 'normal');
-    doc.setTextColor(...dark);
-    doc.text(value, 80, y);
-    y += 7;
-  };
-
-  addRow('Amount:', `${receipt.amount} ${receipt.currency}`);
-  addRow('From:', receipt.fromAddress.slice(0, 20) + '...' + receipt.fromAddress.slice(-6));
-  addRow('To:', receipt.toAddress.slice(0, 20) + '...' + receipt.toAddress.slice(-6));
-
+  if (receipt.fromAddress) {
+    summaryRows.push(['From', receipt.fromAddress]);
+  }
+  if (receipt.toAddress && receipt.toAddress !== 'multiple') {
+    summaryRows.push(['To', receipt.toAddress]);
+  }
   if (receipt.note) {
-    addRow('Note:', receipt.note);
+    summaryRows.push(['Note', receipt.note]);
+  }
+  if (receipt.txId) {
+    summaryRows.push(['Transaction ID', receipt.txId]);
   }
 
+  autoTable(doc, {
+    startY: titleY + 15,
+    head: [],
+    body: summaryRows,
+    theme: 'plain',
+    styles: { fontSize: 9, cellPadding: 3 },
+    columnStyles: {
+      0: { fontStyle: 'bold', textColor: GRAY, cellWidth: 40 },
+      1: { textColor: DARK },
+    },
+    alternateRowStyles: { fillColor: LIGHT_GRAY },
+    margin: { left: 14, right: 14 },
+  });
+
+  let finalY = (doc as any).lastAutoTable?.finalY ?? (titleY + 15 + summaryRows.length * 7);
+
   if (receipt.txId) {
-    y += 3;
-    doc.setFont('helvetica', 'bold');
-    doc.setTextColor(...gray);
-    doc.text('Transaction ID:', 14, y);
-    doc.setFont('helvetica', 'normal');
-    doc.setTextColor(...teal);
-    const link = getTransactionExplorerUrl(receipt.txId);
-    doc.textWithLink(receipt.txId.slice(0, 30) + '...', 80, y, { url: link });
-    y += 7;
+    finalY += 4;
+    doc.setFontSize(8);
+    doc.setTextColor(...TEAL);
+    const txUrl = getTransactionExplorerUrl(receipt.txId);
+    doc.textWithLink('View on Solscan →', 14, finalY, { url: txUrl });
+    finalY += 8;
   }
 
   if (receipt.participants && receipt.participants.length > 0) {
-    y += 5;
+    finalY += 6;
+    doc.setFontSize(11);
     doc.setFont('helvetica', 'bold');
-    doc.setTextColor(...dark);
-    doc.text('Participants:', 14, y);
-    y += 7;
+    doc.setTextColor(...DARK);
+    doc.text('Participants', 14, finalY);
+    finalY += 4;
 
-    receipt.participants.forEach((p) => {
-      doc.setFont('helvetica', 'normal');
-      doc.setTextColor(...dark);
-      const statusColor = p.status === 'confirmed' ? [16, 185, 129] : p.status === 'failed' ? [239, 68, 68] : [245, 158, 11];
-      doc.setFillColor(...(statusColor as [number, number, number]));
-      doc.roundedRect(14, y - 4, 170, 6, 1, 1, 'F');
-      doc.setTextColor(255, 255, 255);
-      doc.setFontSize(8);
-      doc.text(`${p.nickname} | ${p.address.slice(0, 12)}... | ${p.amount} ${receipt.currency} | ${p.status.toUpperCase()}`, 16, y);
-      y += 8;
+    const participantRows = receipt.participants.map((p, i) => [
+      (i + 1).toString(),
+      p.nickname || `Person ${i + 1}`,
+      p.address.slice(0, 16) + '...' + p.address.slice(-8),
+      `${p.amount.toFixed(6)} ${receipt.currency}`,
+      p.status.toUpperCase(),
+      p.txId ? p.txId.slice(0, 12) + '...' : '—',
+    ]);
+
+    autoTable(doc, {
+      startY: finalY,
+      head: [['#', 'Name', 'Address', 'Amount', 'Status', 'Tx ID']],
+      body: participantRows,
+      theme: 'grid',
+      headStyles: {
+        fillColor: PURPLE,
+        textColor: [255, 255, 255],
+        fontSize: 8,
+        fontStyle: 'bold',
+      },
+      bodyStyles: { fontSize: 7.5, textColor: DARK },
+      columnStyles: {
+        0: { cellWidth: 8 },
+        4: {
+          fontStyle: 'bold',
+          halign: 'center',
+        },
+      },
+      didParseCell: (data: any) => {
+        if (data.section === 'body' && data.column.index === 4) {
+          const val = data.cell.raw?.toString() ?? '';
+          if (val === 'CONFIRMED') data.cell.styles.textColor = [16, 185, 129];
+          else if (val === 'FAILED') data.cell.styles.textColor = [239, 68, 68];
+          else data.cell.styles.textColor = [245, 158, 11];
+        }
+      },
+      alternateRowStyles: { fillColor: LIGHT_GRAY },
+      margin: { left: 14, right: 14 },
     });
+
+    finalY = (doc as any).lastAutoTable?.finalY ?? finalY;
   }
 
-  y += 5;
-  doc.setFontSize(8);
-  doc.setFont('helvetica', 'italic');
-  doc.setTextColor(...gray);
-  doc.text('Generated by Solvio — Solana Payment Hub', 14, y);
+  const pageH = doc.internal.pageSize.getHeight();
+  doc.setFillColor(...TEAL);
+  doc.rect(0, pageH - 12, pageW, 12, 'F');
+  doc.setFontSize(7);
+  doc.setFont('helvetica', 'normal');
+  doc.setTextColor(255, 255, 255);
+  doc.text('Generated by Solvio — Solana Payment Hub · solvio.app', pageW / 2, pageH - 5, { align: 'center' });
 
-  const filename = `solvio-receipt-${receipt.id.slice(0, 8)}.pdf`;
+  const filename = `solvio-receipt-${format(new Date(receipt.date), 'yyyy-MM-dd')}-${receipt.id.slice(0, 6)}.pdf`;
   doc.save(filename);
 }

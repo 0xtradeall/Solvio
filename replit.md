@@ -1,55 +1,87 @@
 # Solvio — Solana Payment Hub
 
-## Overview
-Solvio is a mobile-first Progressive Web App (PWA) built on the Solana blockchain. It enables seamless SOL and USDC payments without a backend — all logic is client-side.
+Mobile-first PWA for requesting SOL payments, splitting bills, and generating PDF receipts. All transactions on Solana Devnet. Frontend-only, no backend/database.
 
 ## Architecture
-- **Framework**: Next.js 13.5.6 (App Router) with Babel compilation (SWC disabled for Replit compatibility)
-- **Language**: TypeScript with strict mode off for broader compatibility  
-- **Styling**: TailwindCSS with custom purple (#7C3AED) and teal (#0D9488) theme
-- **Blockchain**: Solana Devnet via `@solana/web3.js` and `@solana/wallet-adapter-react`
-- **Wallet**: Phantom wallet only (MVP)
-- **Storage**: localStorage keyed to wallet address
-- **PDFs**: jsPDF for receipt generation
-- **QR Codes**: qrcode.react
 
-## Project Structure
+- **Framework**: Next.js 13.5.6 (App Router) with Babel (not SWC — required for Replit)
+- **Styling**: Tailwind CSS with custom purple/teal theme
+- **Wallet**: Phantom via `@solana/wallet-adapter-react`
+- **Blockchain**: Solana Devnet
+- **PDF**: jsPDF + jspdf-autotable (dynamic import)
+- **QR Codes**: qrcode.react v3 (`QRCodeSVG`)
+- **Storage**: browser localStorage (no backend)
+
+## Key Notes
+
+### Critical Configuration
+- **MUST keep `.babelrc`** with `{"presets": ["next/babel"]}` — Next.js 14 SWC binary crashes with SIGBUS on Replit
+- **Port**: 5000 (configured in `next.config.js` via dev command `next dev -p 5000`)
+- **Webpack fallbacks** in `next.config.js`: `fs: false, net: false, tls: false, encoding: false, 'pino-pretty': false, 'supports-color': false` — required for Solana browser compatibility
+- Non-critical build warnings from `supports-color`, `encoding`, `pino-pretty` are expected and benign
+
+### Wallet Adapter Pattern
+Use `wallet.sendTransaction(transaction, connection)` from `useWallet()` — not manual sign + sendRaw.
+
+### QR Code
+`QRCodeSVG` (named export) from `qrcode.react@3.x` — NOT the default export.
+
+### PDF Generation
+Always dynamic-import both jsPDF and jspdf-autotable together to avoid SSR errors.
+
+## File Structure
+
 ```
 app/
-  layout.tsx          - Root layout with WalletProvider and BottomNav
-  page.tsx            - Redirects to /request
-  request/page.tsx    - Payment request generation with QR code
-  split/page.tsx      - Bill splitting with multi-party payments
-  receipts/page.tsx   - View and download past receipts
-  settings/page.tsx   - Wallet settings and data management
-  pay/page.tsx        - Payment fulfillment page (opened from QR/link)
+  page.tsx           → redirects to /request
+  layout.tsx         → root layout with WalletProvider + BottomNav
+  globals.css        → Tailwind + Inter font + wallet adapter overrides
+  request/page.tsx   → Payment request + QR code + payment detection polling
+  split/page.tsx     → Bill splitting with equal/custom amounts + retry
+  receipts/page.tsx  → LocalStorage receipt viewer + PDF download + WhatsApp share
+  settings/page.tsx  → Wallet disconnect, clear receipts, security info
+  pay/page.tsx       → Payer landing page (from QR code scan)
+
 components/
-  providers/WalletProvider.tsx  - Solana wallet adapter setup
-  BottomNav.tsx                 - Mobile bottom navigation
-  WalletConnectButton.tsx       - Phantom wallet connect/disconnect button
+  BottomNav.tsx
+  WalletConnectButton.tsx
+  providers/WalletProvider.tsx
+
 lib/
-  transactions.ts   - Solana transaction functions
-  storage.ts        - localStorage helpers
-  validators.ts     - Solana address and amount validation
-  pdf.ts            - PDF receipt generation with jsPDF
-types/
-  index.ts          - TypeScript interfaces (Receipt, Participant, etc.)
+  transactions.ts    → sendSOLPayment, pollForIncomingPayment, generatePaymentUrl
+  pdf.ts             → generateReceiptPDF (jsPDF + autotable)
+  storage.ts         → getReceipts, saveReceipt, clearReceipts (localStorage)
+  validators.ts      → validateSolanaAddress, validateAmount
+
+types/index.ts       → Currency, TxStatus, Receipt, TransactionStatus types
 public/
-  manifest.json     - PWA manifest
+  manifest.json      → PWA manifest (SVG icons)
+  favicon.svg        → App favicon
+  icon-192.svg       → PWA icon
+  icon-512.svg       → PWA icon
 ```
 
-## Key Configurations
-- Port: 5000 (both dev and start scripts)
-- Host: 0.0.0.0 (configured via Next.js)
-- Babel: `.babelrc` forces Babel compilation (SWC crashes on Replit)
-- Webpack fallbacks: fs, net, tls, encoding, pino-pretty, supports-color → false
+## Features
 
-## Running
-```
-npm run dev   # starts on port 5000
-npm run build # production build
-npm run start # production start on port 5000
-```
+1. **Request Tab**: Enter amount (SOL/USDC) + note → generates QR code (260px purple) + shareable URL + polls for incoming payment → auto-PDF on detection
+2. **Split Tab**: Add up to 10 participants, equal or custom amounts, sends simultaneous payments, retry failed txs, group PDF receipt
+3. **Receipts Tab**: localStorage receipt list per wallet, expandable details, PDF download, WhatsApp share
+4. **Settings Tab**: Wallet disconnect, Solscan link, clear receipts with confirmation, security info, About
+5. **Pay Page** (`/pay?amount=X&currency=SOL&to=ADDRESS&note=...`): Payer landing page from QR scan, sends payment, PDF receipt
 
-## No Backend
-This app is entirely client-side. All Solana interactions happen via public RPC nodes. No database, no server API routes.
+## Payment URL Format
+`{origin}/pay?amount={number}&currency={SOL|USDC}&to={address}&note={string}`
+
+## LocalStorage Key Format
+`solvio_receipts_{walletAddress}` — max 50 receipts, newest-first
+
+## Solana Config
+- Network: Devnet
+- RPC: `https://api.devnet.solana.com`
+- USDC Mint (Devnet): `Gh9ZwEmdLJ8DscKNTkTqPbNwLNNBjuSzaG9Vp2KGtKJr`
+- Explorer: Solscan with `?cluster=devnet`
+
+## Deployment
+- Target: Autoscale
+- Build: `npm run build`
+- Run: `npm run start`
