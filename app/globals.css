@@ -26,6 +26,24 @@ input[type='number'] {
   -moz-appearance: textfield;
 }
 
+/* ── App page background ──────────────────────────────────────────── */
+.app-bg {
+  position: relative;
+  background-color: #faf8ff;
+  background-image:
+    /* Soft purple radial glow — top centre */
+    radial-gradient(ellipse 80% 40% at 50% -10%, rgba(124, 58, 237, 0.09) 0%, transparent 70%),
+    /* Teal accent — bottom right */
+    radial-gradient(ellipse 50% 30% at 95% 100%, rgba(13, 148, 136, 0.06) 0%, transparent 60%),
+    /* Faint purple — top left */
+    radial-gradient(ellipse 40% 25% at -5% 20%, rgba(139, 92, 246, 0.07) 0%, transparent 60%),
+    /* Subtle mesh dots */
+    radial-gradient(circle, rgba(124, 58, 237, 0.04) 1px, transparent 1px);
+  background-size: 100% 100%, 100% 100%, 100% 100%, 28px 28px;
+  background-attachment: local, local, local, local;
+}
+/* ─────────────────────────────────────────────────────────────────── */
+
 .wallet-adapter-button {
   background-color: #7c3aed !important;
   border-radius: 12px !important;

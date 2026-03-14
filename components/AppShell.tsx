@@ -11,7 +11,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   return (
     <>
       {isAppPage && <AppHeader />}
-      <main className={isAppPage ? 'min-h-screen pb-20 max-w-lg mx-auto' : ''}>
+      <main className={isAppPage ? 'app-bg min-h-screen pb-20 max-w-lg mx-auto' : ''}>
         {children}
       </main>
       {isAppPage && <BottomNav />}

@@ -275,7 +275,7 @@ function ContactSection() {
     if (!form.name || !form.email || !form.message) return;
     const subject = `Message from ${form.name} via Solvio`;
     const body = `From: ${form.name}\nEmail: ${form.email}\n\n${form.message}`;
-    window.open(`mailto:support@solvio.app?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`, '_blank');
+    window.open(`mailto:hello@solviopay.app?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`, '_blank');
     setSent(true);
     setForm({ name: '', email: '', message: '' });
     setTimeout(() => setSent(false), 4000);
@@ -292,24 +292,24 @@ function ContactSection() {
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-12 items-start">
           <div className="space-y-6">
-            <a href="mailto:support@solvio.app"
+            <a href="mailto:hello@solviopay.app"
               className="flex items-center gap-4 p-5 bg-gray-50 hover:bg-primary-50 rounded-2xl transition-colors border border-transparent hover:border-primary-100">
               <div className="w-11 h-11 bg-primary-100 rounded-xl flex items-center justify-center flex-shrink-0">
                 <Mail className="text-primary-600" size={20} />
               </div>
               <div>
                 <p className="text-sm font-semibold text-gray-500">Email</p>
-                <p className="text-primary-600 font-bold text-lg">support@solvio.app</p>
+                <p className="text-primary-600 font-bold text-lg">hello@solviopay.app</p>
               </div>
             </a>
-            <a href="https://twitter.com/solvioapp" target="_blank" rel="noopener noreferrer"
+            <a href="https://twitter.com/solviopay" target="_blank" rel="noopener noreferrer"
               className="flex items-center gap-4 p-5 bg-gray-50 hover:bg-blue-50 rounded-2xl transition-colors border border-transparent hover:border-blue-100">
               <div className="w-11 h-11 bg-blue-100 rounded-xl flex items-center justify-center flex-shrink-0">
                 <Twitter className="text-blue-500" size={20} />
               </div>
               <div>
                 <p className="text-sm font-semibold text-gray-500">Twitter / X</p>
-                <p className="text-blue-500 font-bold text-lg">@solvioapp</p>
+                <p className="text-blue-500 font-bold text-lg">@solviopay</p>
               </div>
             </a>
             <div className="space-y-3">
@@ -397,8 +397,8 @@ function LandingFooter() {
         <div className="pt-8 flex flex-col sm:flex-row items-center justify-between gap-4 text-sm text-gray-500">
           <p>© {new Date().getFullYear()} Solvio · Version 1.0 MVP</p>
           <div className="flex items-center gap-4">
-            <a href="mailto:support@solvio.app" className="hover:text-white transition-colors">support@solvio.app</a>
-            <a href="https://twitter.com/solvioapp" target="_blank" rel="noopener noreferrer" className="hover:text-white transition-colors">@solvioapp</a>
+            <a href="mailto:hello@solviopay.app" className="hover:text-white transition-colors">hello@solviopay.app</a>
+            <a href="https://twitter.com/solviopay" target="_blank" rel="noopener noreferrer" className="hover:text-white transition-colors">@solviopay</a>
           </div>
         </div>
       </div>
