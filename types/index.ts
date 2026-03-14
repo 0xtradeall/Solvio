@@ -18,6 +18,7 @@ export interface Receipt {
 export interface ReceiptParticipant {
   nickname: string;
   address: string;
+  snsName?: string;
   amount: number;
   status: TxStatus;
   txId?: string;
@@ -54,6 +55,7 @@ export interface Contact {
   id: string;
   nickname: string;
   address: string;
+  snsName?: string;
   note?: string;
   createdAt: string;
 }

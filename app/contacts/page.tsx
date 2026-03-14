@@ -5,11 +5,12 @@ import { useWallet } from '@solana/wallet-adapter-react';
 import { useRouter } from 'next/navigation';
 import { Plus, Trash2, Edit3, X, Send, Users, Contact2, Check, AlertCircle } from 'lucide-react';
 import WalletConnectButton from '@/components/WalletConnectButton';
+import SnsAddressInput from '@/components/SnsAddressInput';
 import { getContacts, saveContact, deleteContact } from '@/lib/storage';
 import { validateSolanaAddress } from '@/lib/validators';
 import { Contact } from '@/types';
 
-const emptyForm = { nickname: '', address: '', note: '' };
+const emptyForm = { nickname: '', addressInput: '', resolvedAddress: '', snsName: '', note: '' };
 
 export default function ContactsPage() {
   const { publicKey, connected } = useWallet();
@@ -34,10 +35,12 @@ export default function ContactsPage() {
   const validate = () => {
     const errs: typeof errors = {};
     if (!form.nickname.trim()) errs.nickname = 'Name is required';
-    if (!form.address.trim()) {
+    if (!form.addressInput.trim()) {
       errs.address = 'Wallet address is required';
-    } else if (!validateSolanaAddress(form.address.trim())) {
-      errs.address = 'Invalid Solana wallet address';
+    } else if (!validateSolanaAddress(form.resolvedAddress)) {
+      errs.address = form.snsName && !form.resolvedAddress
+        ? 'Waiting for .sol name to resolve…'
+        : 'Invalid Solana wallet address';
     }
     setErrors(errs);
     return Object.keys(errs).length === 0;
@@ -48,7 +51,8 @@ export default function ContactsPage() {
     const contact: Contact = {
       id: editingId ?? Date.now().toString(),
       nickname: form.nickname.trim(),
-      address: form.address.trim(),
+      address: form.resolvedAddress,
+      snsName: form.snsName || undefined,
       note: form.note.trim() || undefined,
       createdAt: new Date().toISOString(),
     };
@@ -63,7 +67,13 @@ export default function ContactsPage() {
 
   const startEdit = (c: Contact) => {
     setEditingId(c.id);
-    setForm({ nickname: c.nickname, address: c.address, note: c.note ?? '' });
+    setForm({
+      nickname: c.nickname,
+      addressInput: c.snsName || c.address,
+      resolvedAddress: c.address,
+      snsName: c.snsName || '',
+      note: c.note ?? '',
+    });
     setErrors({});
     setShowForm(true);
     window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -137,14 +147,22 @@ export default function ContactsPage() {
 
               <div>
                 <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5 block">Solana Wallet Address *</label>
-                <input
-                  type="text"
-                  value={form.address}
-                  onChange={e => setForm(f => ({ ...f, address: e.target.value }))}
-                  placeholder="Base58 wallet address"
-                  className={`w-full border-2 rounded-xl p-3 font-mono text-sm focus:outline-none transition-colors ${errors.address ? 'border-red-400 bg-red-50' : 'border-gray-200 focus:border-primary-400'}`}
+                <SnsAddressInput
+                  value={form.addressInput}
+                  onChange={(raw, resolved, snsName) =>
+                    setForm(f => ({
+                      ...f,
+                      addressInput: raw,
+                      resolvedAddress: resolved || (!snsName ? raw : ''),
+                      snsName: snsName || '',
+                    }))
+                  }
+                  error={errors.address}
+                  inputClassName="p-3"
                 />
-                {errors.address && <p className="text-red-500 text-xs mt-1 flex items-center gap-1"><AlertCircle size={11} />{errors.address}</p>}
+                {errors.address && (
+                  <p className="text-red-500 text-xs mt-1 flex items-center gap-1"><AlertCircle size={11} />{errors.address}</p>
+                )}
               </div>
 
               <div>
@@ -198,7 +216,13 @@ export default function ContactsPage() {
                       </div>
                       <div className="min-w-0">
                         <p className="font-semibold text-gray-900 truncate">{c.nickname}</p>
-                        <p className="text-xs font-mono text-gray-400 truncate">{c.address.slice(0, 8)}...{c.address.slice(-6)}</p>
+                        {c.snsName ? (
+                          <p className="text-xs font-mono text-gray-400 truncate">
+                            {c.snsName} ({c.address.slice(0, 4)}…{c.address.slice(-4)})
+                          </p>
+                        ) : (
+                          <p className="text-xs font-mono text-gray-400 truncate">{c.address.slice(0, 8)}...{c.address.slice(-6)}</p>
+                        )}
                         {c.note && <p className="text-xs text-gray-500 mt-0.5 italic">{c.note}</p>}
                       </div>
                     </div>

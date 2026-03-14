@@ -6,7 +6,9 @@ import { useSearchParams } from 'next/navigation';
 import { Suspense } from 'react';
 import { Plus, Trash2, AlertCircle, CheckCircle, XCircle, Loader2, RefreshCw, Users } from 'lucide-react';
 import WalletConnectButton from '@/components/WalletConnectButton';
+import SnsAddressInput from '@/components/SnsAddressInput';
 import { validateSolanaAddress, validateAmount } from '@/lib/validators';
+import { isSNSInput } from '@/lib/sns';
 import { sendSOLPayment } from '@/lib/transactions';
 import { saveReceipt } from '@/lib/storage';
 import { generateReceiptPDF } from '@/lib/pdf';
@@ -14,7 +16,9 @@ import { Currency, TxStatus, Receipt } from '@/types';
 
 interface ParticipantState {
   nickname: string;
+  addressInput: string;
   address: string;
+  snsName?: string;
   customAmount: string;
   addressError: string;
   status: TxStatus | 'idle';
@@ -23,7 +27,13 @@ interface ParticipantState {
 }
 
 const makeParticipant = (nickname = '', address = ''): ParticipantState => ({
-  nickname, address, customAmount: '', addressError: '', status: 'idle',
+  nickname,
+  addressInput: address,
+  address,
+  snsName: undefined,
+  customAmount: '',
+  addressError: '',
+  status: 'idle',
 });
 
 function SplitPageContent() {
@@ -43,7 +53,6 @@ function SplitPageContent() {
   const [pdfGenerating, setPdfGenerating] = useState(false);
   const [showSummaryModal, setShowSummaryModal] = useState(false);
 
-  // Handle contact pre-fill from URL params (?add=ADDRESS&name=NAME)
   useEffect(() => {
     const add = searchParams.get('add');
     const name = searchParams.get('name');
@@ -69,15 +78,29 @@ function SplitPageContent() {
     setParticipants(p => p.filter((_, i) => i !== index));
   };
 
-  const updateParticipant = (index: number, field: keyof ParticipantState, value: string) => {
+  const updateParticipant = (index: number, field: 'nickname' | 'customAmount', value: string) => {
     setParticipants(prev => {
       const next = [...prev];
       (next[index] as any)[field] = value;
-      if (field === 'address') {
-        next[index].addressError = value && !validateSolanaAddress(value)
-          ? 'Invalid Solana address'
-          : '';
+      return next;
+    });
+  };
+
+  const updateParticipantAddress = (index: number, raw: string, resolved: string, snsName?: string) => {
+    setParticipants(prev => {
+      const next = [...prev];
+      const isSns = isSNSInput(raw);
+      let addressError = '';
+      if (raw && !isSns && !validateSolanaAddress(raw)) {
+        addressError = 'Invalid Solana address';
       }
+      next[index] = {
+        ...next[index],
+        addressInput: raw,
+        address: resolved || (isSns ? '' : raw),
+        snsName: snsName,
+        addressError,
+      };
       return next;
     });
   };
@@ -91,8 +114,14 @@ function SplitPageContent() {
       setTotalError('');
     }
     const updated = participants.map(p => {
-      const addrErr = !p.address ? 'Wallet address is required'
-        : !validateSolanaAddress(p.address) ? 'Invalid Solana address' : '';
+      let addrErr = '';
+      if (!p.addressInput) {
+        addrErr = 'Wallet address is required';
+      } else if (isSNSInput(p.addressInput) && !p.address) {
+        addrErr = 'Waiting for .sol name to resolve…';
+      } else if (!validateSolanaAddress(p.address)) {
+        addrErr = 'Invalid Solana address';
+      }
       if (addrErr) valid = false;
       return { ...p, addressError: addrErr };
     });
@@ -138,8 +167,12 @@ function SplitPageContent() {
         date: new Date().toISOString(), note: description,
         fromAddress: publicKey.toBase58(), toAddress: 'multiple',
         participants: results.map((p, i) => ({
-          nickname: p.nickname || `Person ${i + 1}`, address: p.address,
-          amount: getShare(i), status: p.status === 'idle' ? 'pending' : p.status, txId: p.txId,
+          nickname: p.nickname || `Person ${i + 1}`,
+          address: p.address,
+          snsName: p.snsName,
+          amount: getShare(i),
+          status: p.status === 'idle' ? 'pending' : p.status,
+          txId: p.txId,
         })),
       };
       saveReceipt(publicKey.toBase58(), receipt);
@@ -172,8 +205,12 @@ function SplitPageContent() {
       date: new Date().toISOString(), note: description,
       fromAddress: publicKey.toBase58(), toAddress: 'multiple',
       participants: participants.map((p, i) => ({
-        nickname: p.nickname || `Person ${i + 1}`, address: p.address,
-        amount: getShare(i), status: p.status === 'idle' ? 'pending' : p.status, txId: p.txId,
+        nickname: p.nickname || `Person ${i + 1}`,
+        address: p.address,
+        snsName: p.snsName,
+        amount: getShare(i),
+        status: p.status === 'idle' ? 'pending' : p.status,
+        txId: p.txId,
       })),
     };
     setPdfGenerating(true);
@@ -299,10 +336,15 @@ function SplitPageContent() {
                   placeholder="Name or nickname" disabled={isSending || p.status === 'confirmed'}
                   className="w-full border-2 border-gray-200 focus:border-primary-400 rounded-xl p-2.5 text-sm focus:outline-none transition-colors disabled:opacity-60" />
                 <div>
-                  <input type="text" value={p.address} onChange={e => updateParticipant(i, 'address', e.target.value)}
-                    placeholder="Solana wallet address (base58)" disabled={isSending || p.status === 'confirmed'}
-                    className={`w-full border-2 rounded-xl p-2.5 text-sm font-mono focus:outline-none transition-colors disabled:opacity-60 ${p.addressError ? 'border-red-400 bg-red-50' : 'border-gray-200 focus:border-primary-400'}`} />
-                  {p.addressError && <p className="text-red-500 text-xs mt-1 flex items-center gap-1"><AlertCircle size={11} /> {p.addressError}</p>}
+                  <SnsAddressInput
+                    value={p.addressInput}
+                    onChange={(raw, resolved, snsName) => updateParticipantAddress(i, raw, resolved, snsName)}
+                    disabled={isSending || p.status === 'confirmed'}
+                    error={p.addressError}
+                  />
+                  {p.addressError && (
+                    <p className="text-red-500 text-xs mt-1 flex items-center gap-1"><AlertCircle size={11} /> {p.addressError}</p>
+                  )}
                 </div>
                 {!equalSplit && (
                   <input type="number" value={p.customAmount} onChange={e => updateParticipant(i, 'customAmount', e.target.value)}

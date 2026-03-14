@@ -9,6 +9,7 @@
     "lint": "next lint"
   },
   "dependencies": {
+    "@bonfida/spl-name-service": "^3.0.20",
     "@emailjs/browser": "^4.4.1",
     "@solana/spl-token": "^0.3.11",
     "@solana/wallet-adapter-base": "^0.9.23",
