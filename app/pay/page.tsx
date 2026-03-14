@@ -5,7 +5,7 @@ import { Suspense, useState, useEffect } from 'react';
 import { useWallet, useConnection } from '@solana/wallet-adapter-react';
 import { CheckCircle, XCircle, Loader2, ExternalLink, AlertCircle, Download, AlertTriangle, RefreshCw, Smartphone } from 'lucide-react';
 import WalletConnectButton from '@/components/WalletConnectButton';
-import { sendSOLPayment, getTransactionExplorerUrl } from '@/lib/transactions';
+import { sendPayment, getTransactionExplorerUrl } from '@/lib/transactions';
 import { validateSolanaAddress, validateAmount } from '@/lib/validators';
 import { saveReceipt } from '@/lib/storage';
 import { generateReceiptPDF } from '@/lib/pdf';
@@ -157,7 +157,7 @@ function PayPageContent() {
   const handlePay = async () => {
     if (!publicKey) return;
     setTxError(null);
-    const result = await sendSOLPayment(connection, wallet, toAddress, amount, (status) => {
+    const result = await sendPayment(connection, wallet, toAddress, amount, currency, (status) => {
       setTxStatus(status.status);
       if (status.signature) setTxId(status.signature);
       if (status.error) setTxError(status.error);
@@ -277,7 +277,14 @@ function PayPageContent() {
             <XCircle className="text-red-500 mx-auto" size={48} />
             <div>
               <p className="text-red-700 font-bold text-lg">Payment Failed</p>
-              {txError && <p className="text-sm text-red-500 mt-1">{txError}</p>}
+              {txError && (
+                <p className="text-sm text-red-500 mt-1">
+                  {txError.replace('spl-token-faucet.vercel.app', '').trimEnd().replace(/\.$/, '')}
+                  {txError.includes('spl-token-faucet.vercel.app') && (
+                    <> — <a href="https://spl-token-faucet.vercel.app" target="_blank" rel="noopener noreferrer" className="underline font-semibold text-red-700">Get devnet USDC →</a></>
+                  )}
+                </p>
+              )}
             </div>
             <button onClick={() => { setTxStatus('idle'); setTxError(null); }}
               className="w-full bg-red-500 hover:bg-red-600 text-white font-semibold py-3 rounded-xl transition-colors">

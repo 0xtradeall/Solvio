@@ -9,7 +9,7 @@ import WalletConnectButton from '@/components/WalletConnectButton';
 import SnsAddressInput from '@/components/SnsAddressInput';
 import { validateSolanaAddress, validateAmount } from '@/lib/validators';
 import { isSNSInput } from '@/lib/sns';
-import { sendSOLPayment } from '@/lib/transactions';
+import { sendPayment } from '@/lib/transactions';
 import { saveReceipt } from '@/lib/storage';
 import { generateReceiptPDF } from '@/lib/pdf';
 import { Currency, TxStatus, Receipt } from '@/types';
@@ -149,7 +149,7 @@ function SplitPageContent() {
         if (p.status === 'confirmed') return;
         results[i] = { ...results[i], status: 'pending', txId: undefined, txError: undefined };
         setParticipants([...results]);
-        await sendSOLPayment(connection, wallet, p.address, getShare(i), (s) => {
+        await sendPayment(connection, wallet, p.address, getShare(i), currency, (s) => {
           results[i] = { ...results[i], status: s.status, txId: s.signature, txError: s.error };
           setParticipants([...results]);
         });
@@ -189,7 +189,7 @@ function SplitPageContent() {
       return next;
     });
     const share = getShare(index);
-    await sendSOLPayment(connection, wallet, p.address, share, (s) => {
+    await sendPayment(connection, wallet, p.address, share, currency, (s) => {
       setParticipants(prev => {
         const next = [...prev];
         next[index] = { ...next[index], status: s.status, txId: s.signature, txError: s.error };
@@ -360,7 +360,14 @@ function SplitPageContent() {
                     <CheckCircle size={11} />Tx: {p.txId.slice(0, 24)}...
                   </a>
                 )}
-                {p.txError && <p className="text-xs text-red-500 bg-red-50 rounded-lg p-2">{p.txError}</p>}
+                {p.txError && (
+                  <p className="text-xs text-red-500 bg-red-50 rounded-lg p-2">
+                    {p.txError.replace('spl-token-faucet.vercel.app', '').trimEnd().replace(/\.$/, '')}
+                    {p.txError.includes('spl-token-faucet.vercel.app') && (
+                      <> — <a href="https://spl-token-faucet.vercel.app" target="_blank" rel="noopener noreferrer" className="underline font-semibold">Get devnet USDC →</a></>
+                    )}
+                  </p>
+                )}
               </div>
             ))}
           </div>

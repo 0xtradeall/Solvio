@@ -8,7 +8,7 @@ const nextConfig = {
   env: {
     NEXT_PUBLIC_SOLANA_NETWORK: 'devnet',
     NEXT_PUBLIC_SOLANA_RPC_URL: 'https://api.devnet.solana.com',
-    NEXT_PUBLIC_USDC_MINT: 'Gh9ZwEmdLJ8DscKNTkTqPbNwLNNBjuSzaG9Vp2KGtKJr',
+    NEXT_PUBLIC_USDC_MINT: '4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU',
   },
   webpack: (config, { isServer }) => {
     if (!isServer) {

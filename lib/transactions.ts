@@ -5,11 +5,18 @@ import {
   SystemProgram,
   LAMPORTS_PER_SOL,
 } from '@solana/web3.js';
+import {
+  getAssociatedTokenAddress,
+  createAssociatedTokenAccountInstruction,
+  createTransferInstruction,
+  getAccount,
+} from '@solana/spl-token';
 import { WalletContextState } from '@solana/wallet-adapter-react';
 import { TransactionStatus, Currency } from '@/types';
 import { validateSolanaAddress } from './validators';
 
-export const USDC_MINT_DEVNET = 'Gh9ZwEmdLJ8DscKNTkTqPbNwLNNBjuSzaG9Vp2KGtKJr';
+export const USDC_MINT_DEVNET = '4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU';
+const USDC_DECIMALS = 6;
 
 export function getTransactionExplorerUrl(signature: string): string {
   return `https://solscan.io/tx/${signature}?cluster=devnet`;
@@ -29,6 +36,109 @@ export function generatePaymentUrl(
   };
   if (note) params.note = note;
   return `${baseUrl}/pay?${new URLSearchParams(params).toString()}`;
+}
+
+export async function sendPayment(
+  connection: Connection,
+  wallet: WalletContextState,
+  receiverAddress: string,
+  amount: number,
+  currency: Currency,
+  onStatus: (status: TransactionStatus) => void
+): Promise<TransactionStatus> {
+  if (currency === 'USDC') {
+    return sendUSDCPayment(connection, wallet, receiverAddress, amount, onStatus);
+  }
+  return sendSOLPayment(connection, wallet, receiverAddress, amount, onStatus);
+}
+
+async function sendUSDCPayment(
+  connection: Connection,
+  wallet: WalletContextState,
+  receiverAddress: string,
+  amountUSDC: number,
+  onStatus: (status: TransactionStatus) => void
+): Promise<TransactionStatus> {
+  if (!wallet.publicKey || !wallet.sendTransaction) {
+    return { status: 'failed', error: 'Wallet not connected' };
+  }
+  if (!validateSolanaAddress(receiverAddress)) {
+    const result: TransactionStatus = { status: 'failed', error: 'Invalid receiver address' };
+    onStatus(result);
+    return result;
+  }
+
+  onStatus({ status: 'pending' });
+
+  try {
+    const mintPubkey = new PublicKey(USDC_MINT_DEVNET);
+    const senderPubkey = wallet.publicKey;
+    const receiverPubkey = new PublicKey(receiverAddress);
+    const tokenAmount = Math.floor(amountUSDC * Math.pow(10, USDC_DECIMALS));
+
+    const senderATA = await getAssociatedTokenAddress(mintPubkey, senderPubkey);
+
+    try {
+      const senderAccount = await getAccount(connection, senderATA);
+      const balance = Number(senderAccount.amount) / Math.pow(10, USDC_DECIMALS);
+      if (balance < amountUSDC) {
+        const result: TransactionStatus = {
+          status: 'failed',
+          error: `Insufficient USDC balance (${balance.toFixed(2)} USDC). Get devnet USDC at spl-token-faucet.vercel.app`,
+        };
+        onStatus(result);
+        return result;
+      }
+    } catch {
+      const result: TransactionStatus = {
+        status: 'failed',
+        error: 'You need devnet USDC to test. Get some at spl-token-faucet.vercel.app',
+      };
+      onStatus(result);
+      return result;
+    }
+
+    const receiverATA = await getAssociatedTokenAddress(mintPubkey, receiverPubkey);
+    const transaction = new Transaction();
+
+    try {
+      await getAccount(connection, receiverATA);
+    } catch {
+      transaction.add(
+        createAssociatedTokenAccountInstruction(
+          senderPubkey,
+          receiverATA,
+          receiverPubkey,
+          mintPubkey,
+        )
+      );
+    }
+
+    transaction.add(
+      createTransferInstruction(
+        senderATA,
+        receiverATA,
+        senderPubkey,
+        tokenAmount,
+      )
+    );
+
+    const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash('confirmed');
+    transaction.recentBlockhash = blockhash;
+    transaction.feePayer = senderPubkey;
+
+    const signature = await wallet.sendTransaction(transaction, connection);
+    await connection.confirmTransaction({ signature, blockhash, lastValidBlockHeight }, 'confirmed');
+
+    const result: TransactionStatus = { status: 'confirmed', signature };
+    onStatus(result);
+    return result;
+  } catch (error) {
+    const errMsg = error instanceof Error ? error.message : 'USDC transaction failed';
+    const result: TransactionStatus = { status: 'failed', error: errMsg };
+    onStatus(result);
+    return result;
+  }
 }
 
 export async function sendSOLPayment(
@@ -66,11 +176,7 @@ export async function sendSOLPayment(
     transaction.feePayer = wallet.publicKey;
 
     const signature = await wallet.sendTransaction(transaction, connection);
-
-    await connection.confirmTransaction(
-      { signature, blockhash, lastValidBlockHeight },
-      'confirmed'
-    );
+    await connection.confirmTransaction({ signature, blockhash, lastValidBlockHeight }, 'confirmed');
 
     const result: TransactionStatus = { status: 'confirmed', signature };
     onStatus(result);
@@ -102,7 +208,7 @@ export async function pollForIncomingPayment(
             maxSupportedTransactionVersion: 0,
           });
           if (tx) {
-            const accounts = tx.transaction.message.getAccountKeys ? 
+            const accounts = tx.transaction.message.getAccountKeys ?
               tx.transaction.message.getAccountKeys().staticAccountKeys :
               (tx.transaction.message as any).accountKeys;
             const toIdx = accounts?.findIndex((k: PublicKey) => k?.toBase58() === toAddress);
