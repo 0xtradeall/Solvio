@@ -1,0 +1,75 @@
+You are an expert Full-Stack Frontend Developer specializing in React-based Progressive Web Apps (PWAs) for blockchain applications on Solana. Your task is to generate the complete, production-ready frontend codebase for the Solvio project—a mobile-first PWA serving as a Solana payment hub for real-world use cases like freelancer invoicing, merchant payments, and bill splitting among friends. This app targets users on mobile devices (optimized for 390px+ screen widths, installable on home screens) and emphasizes simplicity, no traditional logins (Phantom wallet connection acts as authentication), client-side only operations (no backend or database), and modularity for future Android offline integration via Pollinet SDK.
+
+### Project Overview and Core Requirements
+Solvio enables seamless SOL and USDC payments without fiat on-ramps or other tokens (MVP scope). Key principles:
+- **Authentication & Storage**: One-time connection to Phantom wallet via @solana/wallet-adapter-react. No private keys stored or handled—Phantom manages signing. Store receipts in browser localStorage, keyed to the connected wallet's public address for persistence across sessions on the same device (no cross-device sync needed). Example key: `solvio_receipts_${walletAddress}` as a JSON array of transaction objects.
+- **UI/UX Design**: Clean, fintech-inspired interface like Revolut or Venmo. Use a purple (#7C3AED) and teal (#0D9488) color scheme. Mobile-optimized: Touch-friendly buttons (min 44px height), sans-serif fonts (e.g., Inter or system-ui), ample whitespace. Bottom tab navigation for tabs: Request (home), Split, Receipts, Settings. Ensure PWA manifest for installability (icons, theme color: purple).
+- **No Backend**: All logic client-side. Transactions broadcast directly via Solana RPC (use mainnet-beta). Handle errors gracefully: Validate wallet addresses pre-send (using @solana/web3.js PublicKey validation), show red highlights for invalid fields, partial success summaries for splits (no rollbacks on confirmed txs), and individual Retry buttons for failures.
+- **Features Breakdown**:
+  1. **Request Tab**: Form for amount (SOL or USDC toggle), optional note. Auto-fill receiver address from connected wallet. Generate shareable URL (e.g., current domain + `/pay?amount=${amount}&currency=${currency}&address=${address}&note=${note}`) and large QR code (via qrcode.react, 300x300px, centered). On payer side: Link opens app/PWA, auto-triggers Phantom for one-tap payment. Post-confirmation: Poll for tx signature, then generate/download PDF receipt via jsPDF (include: date, amount/currency, sender/receiver addresses, tx ID hyperlinked to `https://solscan.io/tx/${txId}`, note). Save to localStorage.
+  2. **Split Tab**: Input total amount (SOL/USDC), description, dynamic list of participants (add/remove via + button; each with nickname input and wallet address input—validate on blur). Toggle: Equal split (auto-calculate per person) or custom amounts (sum must equal total). "Send All Payments" button: Locks inputs, sends parallel transactions (use Promise.allSettled), shows live per-person status badges (Pending: yellow spinner; Confirmed: green check; Failed: red X with Retry). On partial success: Summary modal (e.g., "3/5 confirmed"). Generate single PDF for whole split (list all tx details). Save all to localStorage.
+  3. **Receipts Tab**: List view of stored transactions (filter by date/currency if connected). Each card: Amount, date, status, participants (for splits), Download PDF button (regenerate via jsPDF), WhatsApp share button (construct `whatsapp://send?text=Receipt: ${amount} ${currency} from ${sender} to ${receiver}. Tx: https://solscan.io/tx/${txId}` and open via window.open). Empty state: "Connect wallet to view receipts."
+  4. **Settings Tab**: Wallet connect/disconnect button, clear localStorage option (with confirmation), app info (version 1.0 MVP), and toggle for testnet (disabled for MVP). Disconnect clears session data.
+- **Error Handling Specifics**:
+  - Invalid wallet address: Highlight field red, show tooltip "Enter a valid Solana address (e.g., starts with 1-9A-HJ-NP-Z)."
+  - Tx failure: Mark "Failed" in red, enable Retry (resend only that tx).
+  - Partial splits: "Partial success: X confirmed, Y failed. Confirmed txs cannot be undone."
+  - Network issues: Fallback to retry with exponential backoff (e.g., 1s, 2s, 4s).
+  - Lock during sends: Disable inputs/buttons until all resolve.
+- **Modularity for Future Integration**: Encapsulate all Solana logic in a standalone `lib/transactions.js` file. Export functions like `requestPayment(amount, currency, receiverAddress, note, onStatusUpdate)`, `splitPayments(participants, totalAmount, currency, description, onStatusUpdate)`, `getTransactionStatus(txId)`. Use a callback pattern: `onStatusUpdate({ type: 'pending'|'confirmed'|'failed', data: {...}, error? })` to allow future interception (e.g., by Pollinet SDK in Android wrapper—replace RPC calls with offline relay). Avoid any hardcoded RPC in UI components; inject Connection via context.
+- **Compliance & Security**: No personal data collected (GDPR-irrelevant). Wallet addresses are public; link txs to Solscan safely. Never prompt for seeds/phrases.
+
+### Technical Stack & Implementation Guidelines
+- **Framework**: Next.js 14+ (App Router) for React PWA. Use `next-pwa` plugin for service worker (cache static assets, enable offline manifest viewing but not txs—txs require online).
+- **Languages/Tools**:
+  - TypeScript: Strict typing for all components, props, and Solana objects (e.g., interface for Receipt { id: string; amount: number; currency: 'SOL'|'USDC'; ... }).
+  - Styling: TailwindCSS (configure purple/teal in tailwind.config.js: primary: '#7C3AED', secondary: '#0D9488'). Responsive: sm:390px base, use `container mx-auto px-4`.
+  - Solana Integration: @solana/web3.js (^1.87.6), @solana/wallet-adapter-react (^0.15.35), @solana/wallet-adapter-wallets (Phantom only for MVP), @solana/wallet-adapter-base. Connection: new Connection('https://api.mainnet-beta.solana.com', 'confirmed'). Use WalletProvider in _app.tsx.
+  - Libraries: qrcode.react (^3.1.0) for QR; jspdf (^2.5.1) + jspdf-autotable for PDF (include tables for splits); lucide-react for icons (e.g., Wallet, Receipt); react-hook-form + zod for forms (validation); date-fns for timestamps.
+  - State Management: React Context for wallet (global), Zustand for local app state (e.g., form data, receipts—persist to localStorage via middleware).
+  - PWA: Generate manifest.json (name: "Solvio", short_name: "Solvio", icons: 192x192/512x512 purple/teal, start_url: '/', theme_color: '#7C3AED', background_color: '#ffffff'). Add meta tags in layout.tsx.
+  - Navigation: Next.js Link for tabs; bottom bar fixed (h-16 bg-white border-t shadow-lg).
+  - File Structure**:
+    - `app/`: Root layout.tsx (WalletProvider, PWA meta), globals.css (Tailwind).
+    - `app/(tabs)/`: request/page.tsx, split/page.tsx, receipts/page.tsx, settings/page.tsx.
+    - `components/`: WalletConnectButton.tsx, PaymentForm.tsx, SplitForm.tsx, ReceiptCard.tsx, BottomNav.tsx, QRDisplay.tsx, PDFGenerator.tsx (utils).
+    - `lib/`: transactions.js (Solana utils), storage.js (localStorage helpers: getReceipts(wallet), saveReceipt(...)), validators.js (zod schemas).
+    - `public/`: Icons, manifest.json.
+    - `types/`: index.ts (Receipt, Participant, etc.).
+- **Dependencies** (package.json):
+  ```
+  {
+    "dependencies": {
+      "next": "^14.0.0",
+      "react": "^18.2.0",
+      "react-dom": "^18.2.0",
+      "@solana/web3.js": "^1.87.6",
+      "@solana/wallet-adapter-react": "^0.15.35",
+      "@solana/wallet-adapter-wallets": "^0.19.32",
+      "@solana/wallet-adapter-base": "^0.9.23",
+      "qrcode.react": "^3.1.0",
+      "jspdf": "^2.5.1",
+      "jspdf-autotable": "^3.5.32",
+      "tailwindcss": "^3.3.0",
+      "react-hook-form": "^7.45.0",
+      "zod": "^3.21.4",
+      "zustand": "^4.4.0",
+      "lucide-react": "^0.263.1",
+      "date-fns": "^2.30.0",
+      "next-pwa": "^5.6.0"
+    },
+    "devDependencies": { ... standard TS/Next }
+  }
+  ```
+- **Deployment Prep**: Configure next.config.js for PWA (images: { domains: ['solscan.io'] }). Vercel-ready: No serverless functions needed.
+- **Testing & Edge Cases**: Generate code with PropTypes or TS for props. Handle: Disconnected wallet (redirect to connect), low balance (pre-check via getBalance), mobile viewport (use useMediaQuery hook), QR scanning (link opens in PWA if installed).
+
+### Output Format
+Generate the FULL codebase as a ZIP-like structure: List each file's path and complete content (e.g., ```tsx // app/layout.tsx ... ```). Include:
+- All TSX/JS/CSS files.
+- package.json, next.config.js, tailwind.config.js, tsconfig.json.
+- No external links or placeholders—hardcode example addresses for testing (e.g., receiver: '9WzDXwBbmkg8ZTbNMqUxvQRAyrZzDsGYdLVL9zYtAWWM').
+- Ensure code is unique, bug-free, and follows best practices (e.g., useEffect cleanups, optimistic UI for statuses).
+- At end, provide a README.md snippet for running: `npm install && npm run dev` (localhost:3000).
+
+Focus on mobile-first (test mentally for iPhone SE), Solana-specific patterns (e.g., USDC mint: 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v'), and modularity. If any ambiguity, default to user answers (e.g., no fiat, SOL/USDC only). Generate now—aim for 2000+ LOC total.
