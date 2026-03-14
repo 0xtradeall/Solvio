@@ -1,0 +1,29 @@
+/** @type {import('next').NextConfig} */
+const nextConfig = {
+  reactStrictMode: true,
+  swcMinify: false,
+  images: {
+    domains: ['solscan.io'],
+  },
+  env: {
+    NEXT_PUBLIC_SOLANA_NETWORK: 'devnet',
+    NEXT_PUBLIC_SOLANA_RPC_URL: 'https://api.devnet.solana.com',
+    NEXT_PUBLIC_USDC_MINT: 'Gh9ZwEmdLJ8DscKNTkTqPbNwLNNBjuSzaG9Vp2KGtKJr',
+  },
+  webpack: (config, { isServer }) => {
+    if (!isServer) {
+      config.resolve.fallback = {
+        ...config.resolve.fallback,
+        fs: false,
+        net: false,
+        tls: false,
+        encoding: false,
+        'pino-pretty': false,
+        'supports-color': false,
+      };
+    }
+    return config;
+  },
+};
+
+module.exports = nextConfig;

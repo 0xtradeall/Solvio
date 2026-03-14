@@ -1,0 +1,51 @@
+export type Currency = 'SOL' | 'USDC';
+
+export type TxStatus = 'pending' | 'confirmed' | 'failed';
+
+export interface Receipt {
+  id: string;
+  type: 'request' | 'split';
+  amount: number;
+  currency: Currency;
+  date: string;
+  note?: string;
+  fromAddress: string;
+  toAddress: string;
+  txId?: string;
+  participants?: ReceiptParticipant[];
+}
+
+export interface ReceiptParticipant {
+  nickname: string;
+  address: string;
+  amount: number;
+  status: TxStatus;
+  txId?: string;
+}
+
+export interface Participant {
+  nickname: string;
+  address: string;
+  amount?: number;
+}
+
+export interface PaymentRequestData {
+  amount: number;
+  currency: Currency;
+  note: string;
+  toAddress: string;
+}
+
+export interface SplitBillData {
+  totalAmount: number;
+  currency: Currency;
+  description: string;
+  participants: Participant[];
+  equalSplit: boolean;
+}
+
+export interface TransactionStatus {
+  status: TxStatus;
+  signature?: string;
+  error?: string;
+}
