@@ -12,11 +12,17 @@ const nextConfig = {
     NEXT_PUBLIC_SOLANA_RPC_URL: 'https://api.devnet.solana.com',
     NEXT_PUBLIC_USDC_MINT: '4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU',
   },
-  webpack: (config, { isServer }) => {
+  webpack: (config, { isServer, webpack }) => {
     config.resolve.alias = {
       ...config.resolve.alias,
       'buffer/': path.resolve(__dirname, 'node_modules/buffer/'),
     };
+
+    config.plugins.push(
+      new webpack.IgnorePlugin({
+        resourceRegExp: /^(supports-color|encoding|pino-pretty|utf-8-validate)$/,
+      })
+    );
 
     if (!isServer) {
       config.resolve.fallback = {
@@ -24,9 +30,8 @@ const nextConfig = {
         fs: false,
         net: false,
         tls: false,
-        encoding: false,
-        'pino-pretty': false,
-        'supports-color': false,
+        crypto: require.resolve('crypto-browserify'),
+        stream: require.resolve('stream-browserify'),
         buffer: require.resolve('buffer/'),
       };
     }
