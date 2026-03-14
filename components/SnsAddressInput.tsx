@@ -92,7 +92,7 @@ export default function SnsAddressInput({ value, onChange, disabled, error, inpu
           value={value}
           onChange={handleChange}
           disabled={disabled}
-          placeholder="Wallet address or .sol name (e.g. akaki.sol)"
+          placeholder="Wallet address or .sol name (e.g. solana.sol)"
           className={`w-full border-2 rounded-xl p-2.5 text-sm font-mono focus:outline-none transition-colors disabled:opacity-60 pr-10 ${borderClass} ${inputClassName ?? ''}`}
         />
         {resolveStatus === 'resolving' && (
