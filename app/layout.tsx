@@ -1,7 +1,7 @@
 import type { Metadata } from 'next';
 import './globals.css';
 import { SolvioWalletProvider } from '@/components/providers/WalletProvider';
-import BottomNav from '@/components/BottomNav';
+import AppShell from '@/components/AppShell';
 
 export const metadata: Metadata = {
   metadataBase: new URL('https://solvio.replit.app'),
@@ -24,7 +24,7 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en">
+    <html lang="en" className="scroll-smooth">
       <head>
         <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
         <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -34,10 +34,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       </head>
       <body>
         <SolvioWalletProvider>
-          <main className="min-h-screen pb-16 max-w-lg mx-auto">
+          <AppShell>
             {children}
-          </main>
-          <BottomNav />
+          </AppShell>
         </SolvioWalletProvider>
       </body>
     </html>

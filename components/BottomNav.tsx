@@ -2,12 +2,13 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { CreditCard, Users, FileText, Settings } from 'lucide-react';
+import { CreditCard, Users, FileText, Settings, Contact2 } from 'lucide-react';
 
 const tabs = [
   { href: '/request', label: 'Request', icon: CreditCard },
   { href: '/split', label: 'Split', icon: Users },
   { href: '/receipts', label: 'Receipts', icon: FileText },
+  { href: '/contacts', label: 'Contacts', icon: Contact2 },
   { href: '/settings', label: 'Settings', icon: Settings },
 ];
 
@@ -23,18 +24,14 @@ export default function BottomNav() {
             <Link
               key={href}
               href={href}
-              className={`flex-1 flex flex-col items-center justify-center gap-0.5 text-xs font-medium transition-colors
-                ${isActive
-                  ? 'text-primary-500'
-                  : 'text-gray-400 hover:text-gray-600'
-                }`}
+              className={`flex-1 flex flex-col items-center justify-center gap-0.5 text-xs font-medium transition-all duration-150 active:scale-90 ${
+                isActive ? 'text-primary-500' : 'text-gray-400 hover:text-gray-600'
+              }`}
             >
-              <Icon
-                size={22}
-                strokeWidth={isActive ? 2.5 : 1.8}
-                className={isActive ? 'text-primary-500' : ''}
-              />
-              <span>{label}</span>
+              <span className={`rounded-xl p-1.5 transition-all duration-150 ${isActive ? 'bg-primary-50' : ''}`}>
+                <Icon size={20} strokeWidth={isActive ? 2.5 : 1.8} />
+              </span>
+              <span className={isActive ? 'font-semibold' : ''}>{label}</span>
             </Link>
           );
         })}

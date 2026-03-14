@@ -1,7 +1,9 @@
 'use client';
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { useWallet, useConnection } from '@solana/wallet-adapter-react';
+import { useSearchParams } from 'next/navigation';
+import { Suspense } from 'react';
 import { Plus, Trash2, AlertCircle, CheckCircle, XCircle, Loader2, RefreshCw, Users } from 'lucide-react';
 import WalletConnectButton from '@/components/WalletConnectButton';
 import { validateSolanaAddress, validateAmount } from '@/lib/validators';
@@ -20,18 +22,15 @@ interface ParticipantState {
   txError?: string;
 }
 
-const makeParticipant = (): ParticipantState => ({
-  nickname: '',
-  address: '',
-  customAmount: '',
-  addressError: '',
-  status: 'idle',
+const makeParticipant = (nickname = '', address = ''): ParticipantState => ({
+  nickname, address, customAmount: '', addressError: '', status: 'idle',
 });
 
-export default function SplitPage() {
+function SplitPageContent() {
   const wallet = useWallet();
   const { connection } = useConnection();
   const { publicKey, connected } = wallet;
+  const searchParams = useSearchParams();
 
   const [totalAmount, setTotalAmount] = useState('');
   const [currency, setCurrency] = useState<Currency>('SOL');
@@ -43,6 +42,15 @@ export default function SplitPage() {
   const [totalError, setTotalError] = useState('');
   const [pdfGenerating, setPdfGenerating] = useState(false);
   const [showSummaryModal, setShowSummaryModal] = useState(false);
+
+  // Handle contact pre-fill from URL params (?add=ADDRESS&name=NAME)
+  useEffect(() => {
+    const add = searchParams.get('add');
+    const name = searchParams.get('name');
+    if (add && validateSolanaAddress(add)) {
+      setParticipants([makeParticipant(name ?? '', add)]);
+    }
+  }, [searchParams]);
 
   const total = parseFloat(totalAmount) || 0;
   const perPerson = equalSplit && participants.length > 0 ? total / participants.length : 0;
@@ -67,7 +75,7 @@ export default function SplitPage() {
       (next[index] as any)[field] = value;
       if (field === 'address') {
         next[index].addressError = value && !validateSolanaAddress(value)
-          ? 'Invalid Solana address (must be base58, 32–44 chars)'
+          ? 'Invalid Solana address'
           : '';
       }
       return next;
@@ -82,18 +90,13 @@ export default function SplitPage() {
     } else {
       setTotalError('');
     }
-
     const updated = participants.map(p => {
-      const addrErr = !p.address
-        ? 'Wallet address is required'
-        : !validateSolanaAddress(p.address)
-          ? 'Invalid Solana address'
-          : '';
+      const addrErr = !p.address ? 'Wallet address is required'
+        : !validateSolanaAddress(p.address) ? 'Invalid Solana address' : '';
       if (addrErr) valid = false;
       return { ...p, addressError: addrErr };
     });
     setParticipants(updated);
-
     if (!equalSplit) {
       const sum = participants.reduce((acc, p) => acc + (parseFloat(p.customAmount) || 0), 0);
       if (Math.abs(sum - total) > 0.000001) {
@@ -101,7 +104,6 @@ export default function SplitPage() {
         valid = false;
       }
     }
-
     return valid;
   };
 
@@ -118,23 +120,10 @@ export default function SplitPage() {
         if (p.status === 'confirmed') return;
         results[i] = { ...results[i], status: 'pending', txId: undefined, txError: undefined };
         setParticipants([...results]);
-
-        const share = getShare(i);
-        const result = await sendSOLPayment(
-          connection,
-          wallet,
-          p.address,
-          share,
-          (s) => {
-            results[i] = {
-              ...results[i],
-              status: s.status,
-              txId: s.signature,
-              txError: s.error,
-            };
-            setParticipants([...results]);
-          }
-        );
+        await sendSOLPayment(connection, wallet, p.address, getShare(i), (s) => {
+          results[i] = { ...results[i], status: s.status, txId: s.signature, txError: s.error };
+          setParticipants([...results]);
+        });
       })
     );
 
@@ -145,25 +134,16 @@ export default function SplitPage() {
 
     if (confirmed > 0 && publicKey) {
       const receipt: Receipt = {
-        id: Date.now().toString(),
-        type: 'split',
-        amount: total,
-        currency,
-        date: new Date().toISOString(),
-        note: description,
-        fromAddress: publicKey.toBase58(),
-        toAddress: 'multiple',
+        id: Date.now().toString(), type: 'split', amount: total, currency,
+        date: new Date().toISOString(), note: description,
+        fromAddress: publicKey.toBase58(), toAddress: 'multiple',
         participants: results.map((p, i) => ({
-          nickname: p.nickname || `Person ${i + 1}`,
-          address: p.address,
-          amount: getShare(i),
-          status: p.status === 'idle' ? 'pending' : p.status,
-          txId: p.txId,
+          nickname: p.nickname || `Person ${i + 1}`, address: p.address,
+          amount: getShare(i), status: p.status === 'idle' ? 'pending' : p.status, txId: p.txId,
         })),
       };
       saveReceipt(publicKey.toBase58(), receipt);
     }
-
     setIsSending(false);
   };
 
@@ -175,7 +155,6 @@ export default function SplitPage() {
       next[index] = { ...next[index], status: 'pending', txId: undefined, txError: undefined };
       return next;
     });
-
     const share = getShare(index);
     await sendSOLPayment(connection, wallet, p.address, share, (s) => {
       setParticipants(prev => {
@@ -189,20 +168,12 @@ export default function SplitPage() {
   const handleDownloadPDF = async () => {
     if (!publicKey) return;
     const receipt: Receipt = {
-      id: Date.now().toString(),
-      type: 'split',
-      amount: total,
-      currency,
-      date: new Date().toISOString(),
-      note: description,
-      fromAddress: publicKey.toBase58(),
-      toAddress: 'multiple',
+      id: Date.now().toString(), type: 'split', amount: total, currency,
+      date: new Date().toISOString(), note: description,
+      fromAddress: publicKey.toBase58(), toAddress: 'multiple',
       participants: participants.map((p, i) => ({
-        nickname: p.nickname || `Person ${i + 1}`,
-        address: p.address,
-        amount: getShare(i),
-        status: p.status === 'idle' ? 'pending' : p.status,
-        txId: p.txId,
+        nickname: p.nickname || `Person ${i + 1}`, address: p.address,
+        amount: getShare(i), status: p.status === 'idle' ? 'pending' : p.status, txId: p.txId,
       })),
     };
     setPdfGenerating(true);
@@ -228,7 +199,7 @@ export default function SplitPage() {
   const anyDone = participants.some(p => p.status === 'confirmed' || p.status === 'failed');
 
   return (
-    <div className="p-4 space-y-5 pb-20">
+    <div className="p-4 space-y-5">
       <div className="pt-4">
         <h1 className="text-2xl font-bold text-gray-900">Split the Bill</h1>
         <p className="text-sm text-gray-500 mt-0.5">Pay multiple people simultaneously</p>
@@ -245,79 +216,51 @@ export default function SplitPage() {
       ) : (
         <>
           {showSummaryModal && summary && (
-            <div className={`rounded-2xl p-4 border flex items-start gap-3 ${
-              summary.failed > 0 ? 'bg-yellow-50 border-yellow-200' : 'bg-green-50 border-green-200'
-            }`}>
+            <div className={`rounded-2xl p-4 border flex items-start gap-3 ${summary.failed > 0 ? 'bg-yellow-50 border-yellow-200' : 'bg-green-50 border-green-200'}`}>
               <div className="flex-1">
                 <p className={`font-bold ${summary.failed > 0 ? 'text-yellow-800' : 'text-green-800'}`}>
                   {summary.failed > 0 ? '⚠️ Partial Success' : '✅ All Payments Sent'}
                 </p>
                 <p className={`text-sm mt-0.5 ${summary.failed > 0 ? 'text-yellow-700' : 'text-green-700'}`}>
                   {summary.confirmed}/{summary.total} confirmed{summary.failed > 0 ? `, ${summary.failed} failed` : ''}
-                  {summary.failed > 0 && ' — use Retry buttons below'}
                 </p>
-                {summary.confirmed > 0 && <p className="text-xs mt-0.5 text-gray-500">Confirmed payments cannot be undone.</p>}
               </div>
-              <button onClick={() => setShowSummaryModal(false)} className="text-gray-400 hover:text-gray-600 text-lg leading-none">×</button>
+              <button onClick={() => setShowSummaryModal(false)} className="text-gray-400 hover:text-gray-600 text-lg">×</button>
             </div>
           )}
 
           <div className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100 space-y-4">
             <div>
               <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5 block">Description</label>
-              <input
-                type="text"
-                value={description}
-                onChange={e => setDescription(e.target.value)}
-                placeholder="e.g., Dinner at Nobu, Team lunch..."
-                disabled={isSending}
-                className="w-full border-2 border-gray-200 focus:border-primary-400 rounded-xl p-3 focus:outline-none transition-colors disabled:opacity-60"
-              />
+              <input type="text" value={description} onChange={e => setDescription(e.target.value)}
+                placeholder="e.g., Dinner at Nobu, Team lunch..." disabled={isSending}
+                className="w-full border-2 border-gray-200 focus:border-primary-400 rounded-xl p-3 focus:outline-none transition-colors disabled:opacity-60" />
             </div>
-
             <div>
               <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5 block">Total Amount</label>
               <div className="flex gap-2">
-                <input
-                  type="number"
-                  value={totalAmount}
-                  onChange={e => { setTotalAmount(e.target.value); setTotalError(''); }}
-                  placeholder="0.00"
-                  min="0"
-                  step="any"
-                  disabled={isSending}
-                  className={`flex-1 border-2 rounded-xl p-3 text-xl font-bold focus:outline-none transition-colors disabled:opacity-60 ${
-                    totalError ? 'border-red-400 bg-red-50' : 'border-gray-200 focus:border-primary-400'
-                  }`}
-                />
+                <input type="number" value={totalAmount} onChange={e => { setTotalAmount(e.target.value); setTotalError(''); }}
+                  placeholder="0.00" min="0" step="any" disabled={isSending}
+                  className={`flex-1 border-2 rounded-xl p-3 text-xl font-bold focus:outline-none transition-colors disabled:opacity-60 ${totalError ? 'border-red-400 bg-red-50' : 'border-gray-200 focus:border-primary-400'}`} />
                 <div className="flex bg-gray-100 rounded-xl p-1 gap-1">
-                  {(['SOL', 'USDC'] as Currency[]).map((c) => (
+                  {(['SOL', 'USDC'] as Currency[]).map(c => (
                     <button key={c} onClick={() => setCurrency(c)} disabled={isSending}
-                      className={`px-4 py-2 rounded-lg text-sm font-bold transition-all ${currency === c ? 'bg-white shadow-sm text-primary-600 ring-1 ring-primary-200' : 'text-gray-500'}`}>
-                      {c}
-                    </button>
+                      className={`px-4 py-2 rounded-lg text-sm font-bold transition-all ${currency === c ? 'bg-white shadow-sm text-primary-600 ring-1 ring-primary-200' : 'text-gray-500'}`}>{c}</button>
                   ))}
                 </div>
               </div>
-              {totalError && <p className="text-red-500 text-xs mt-1 flex items-center gap-1"><AlertCircle size={11}/>{totalError}</p>}
+              {totalError && <p className="text-red-500 text-xs mt-1 flex items-center gap-1"><AlertCircle size={11} />{totalError}</p>}
             </div>
-
             <div className="flex items-center gap-3">
               <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Split type</span>
               <div className="flex bg-gray-100 rounded-xl p-1 gap-1">
                 <button onClick={() => setEqualSplit(true)} disabled={isSending}
-                  className={`px-3 py-1.5 rounded-lg text-sm font-semibold transition-all ${equalSplit ? 'bg-white shadow-sm text-primary-600' : 'text-gray-500'}`}>
-                  Equal
-                </button>
+                  className={`px-3 py-1.5 rounded-lg text-sm font-semibold transition-all ${equalSplit ? 'bg-white shadow-sm text-primary-600' : 'text-gray-500'}`}>Equal</button>
                 <button onClick={() => setEqualSplit(false)} disabled={isSending}
-                  className={`px-3 py-1.5 rounded-lg text-sm font-semibold transition-all ${!equalSplit ? 'bg-white shadow-sm text-primary-600' : 'text-gray-500'}`}>
-                  Custom
-                </button>
+                  className={`px-3 py-1.5 rounded-lg text-sm font-semibold transition-all ${!equalSplit ? 'bg-white shadow-sm text-primary-600' : 'text-gray-500'}`}>Custom</button>
               </div>
               {equalSplit && total > 0 && participants.length > 0 && (
-                <span className="text-xs text-gray-500 ml-auto">
-                  {perPerson.toFixed(4)} {currency} each
-                </span>
+                <span className="text-xs text-gray-500 ml-auto">{perPerson.toFixed(4)} {currency} each</span>
               )}
             </div>
           </div>
@@ -325,11 +268,8 @@ export default function SplitPage() {
           <div className="space-y-3">
             <div className="flex items-center justify-between">
               <h2 className="font-bold text-gray-900">Participants <span className="text-gray-400 font-normal text-sm">({participants.length}/10)</span></h2>
-              <button
-                onClick={addParticipant}
-                disabled={participants.length >= 10 || isSending}
-                className="flex items-center gap-1 text-primary-600 hover:text-primary-700 font-semibold text-sm disabled:opacity-40 transition-colors"
-              >
+              <button onClick={addParticipant} disabled={participants.length >= 10 || isSending}
+                className="flex items-center gap-1 text-primary-600 hover:text-primary-700 font-semibold text-sm disabled:opacity-40 transition-colors">
                 <Plus size={16} /> Add Person
               </button>
             </div>
@@ -338,9 +278,7 @@ export default function SplitPage() {
               <div key={i} className={`rounded-2xl p-4 border-2 space-y-3 transition-all ${cardBorder(p.status)}`}>
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
-                    <div className="w-7 h-7 bg-primary-100 rounded-full flex items-center justify-center text-primary-700 font-bold text-xs flex-shrink-0">
-                      {i + 1}
-                    </div>
+                    <div className="w-7 h-7 bg-primary-100 rounded-full flex items-center justify-center text-primary-700 font-bold text-xs flex-shrink-0">{i + 1}</div>
                     {statusBadge(p.status)}
                   </div>
                   <div className="flex items-center gap-2">
@@ -357,96 +295,59 @@ export default function SplitPage() {
                     )}
                   </div>
                 </div>
-
-                <input
-                  type="text"
-                  value={p.nickname}
-                  onChange={e => updateParticipant(i, 'nickname', e.target.value)}
-                  placeholder="Name or nickname"
-                  disabled={isSending || p.status === 'confirmed'}
-                  className="w-full border-2 border-gray-200 focus:border-primary-400 rounded-xl p-2.5 text-sm focus:outline-none transition-colors disabled:opacity-60"
-                />
-
+                <input type="text" value={p.nickname} onChange={e => updateParticipant(i, 'nickname', e.target.value)}
+                  placeholder="Name or nickname" disabled={isSending || p.status === 'confirmed'}
+                  className="w-full border-2 border-gray-200 focus:border-primary-400 rounded-xl p-2.5 text-sm focus:outline-none transition-colors disabled:opacity-60" />
                 <div>
-                  <input
-                    type="text"
-                    value={p.address}
-                    onChange={e => updateParticipant(i, 'address', e.target.value)}
-                    placeholder="Solana wallet address (base58)"
-                    disabled={isSending || p.status === 'confirmed'}
-                    className={`w-full border-2 rounded-xl p-2.5 text-sm font-mono focus:outline-none transition-colors disabled:opacity-60 ${
-                      p.addressError ? 'border-red-400 bg-red-50 focus:border-red-400' : 'border-gray-200 focus:border-primary-400'
-                    }`}
-                  />
-                  {p.addressError && (
-                    <p className="text-red-500 text-xs mt-1 flex items-center gap-1">
-                      <AlertCircle size={11} /> {p.addressError}
-                    </p>
-                  )}
+                  <input type="text" value={p.address} onChange={e => updateParticipant(i, 'address', e.target.value)}
+                    placeholder="Solana wallet address (base58)" disabled={isSending || p.status === 'confirmed'}
+                    className={`w-full border-2 rounded-xl p-2.5 text-sm font-mono focus:outline-none transition-colors disabled:opacity-60 ${p.addressError ? 'border-red-400 bg-red-50' : 'border-gray-200 focus:border-primary-400'}`} />
+                  {p.addressError && <p className="text-red-500 text-xs mt-1 flex items-center gap-1"><AlertCircle size={11} /> {p.addressError}</p>}
                 </div>
-
                 {!equalSplit && (
-                  <input
-                    type="number"
-                    value={p.customAmount}
-                    onChange={e => updateParticipant(i, 'customAmount', e.target.value)}
-                    placeholder={`Amount in ${currency}`}
-                    min="0"
-                    step="any"
-                    disabled={isSending || p.status === 'confirmed'}
-                    className="w-full border-2 border-gray-200 focus:border-primary-400 rounded-xl p-2.5 text-sm focus:outline-none transition-colors disabled:opacity-60"
-                  />
+                  <input type="number" value={p.customAmount} onChange={e => updateParticipant(i, 'customAmount', e.target.value)}
+                    placeholder={`Amount in ${currency}`} min="0" step="any" disabled={isSending || p.status === 'confirmed'}
+                    className="w-full border-2 border-gray-200 focus:border-primary-400 rounded-xl p-2.5 text-sm focus:outline-none transition-colors disabled:opacity-60" />
                 )}
-
                 {equalSplit && total > 0 && (
-                  <p className="text-xs text-gray-400">
-                    Share: <span className="font-bold text-primary-600">{perPerson.toFixed(6)} {currency}</span>
-                  </p>
+                  <p className="text-xs text-gray-400">Share: <span className="font-bold text-primary-600">{perPerson.toFixed(6)} {currency}</span></p>
                 )}
-
                 {p.txId && (
-                  <a
-                    href={`https://solscan.io/tx/${p.txId}?cluster=devnet`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-xs text-secondary-600 underline break-all flex items-center gap-1"
-                  >
-                    <CheckCircle size={11} />
-                    Tx: {p.txId.slice(0, 24)}...
+                  <a href={`https://solscan.io/tx/${p.txId}?cluster=devnet`} target="_blank" rel="noopener noreferrer"
+                    className="text-xs text-secondary-600 underline break-all flex items-center gap-1">
+                    <CheckCircle size={11} />Tx: {p.txId.slice(0, 24)}...
                   </a>
                 )}
-
-                {p.txError && (
-                  <p className="text-xs text-red-500 bg-red-50 rounded-lg p-2">{p.txError}</p>
-                )}
+                {p.txError && <p className="text-xs text-red-500 bg-red-50 rounded-lg p-2">{p.txError}</p>}
               </div>
             ))}
           </div>
 
           {anyDone && (
-            <button
-              onClick={handleDownloadPDF}
-              disabled={pdfGenerating}
-              className="w-full flex items-center justify-center gap-2 border-2 border-primary-200 text-primary-600 hover:bg-primary-50 font-semibold py-3.5 rounded-xl transition-colors"
-            >
+            <button onClick={handleDownloadPDF} disabled={pdfGenerating}
+              className="w-full flex items-center justify-center gap-2 border-2 border-primary-200 text-primary-600 hover:bg-primary-50 active:scale-95 font-semibold py-3.5 rounded-xl transition-all">
               {pdfGenerating ? <Loader2 size={16} className="animate-spin" /> : null}
               {pdfGenerating ? 'Generating PDF...' : 'Download Group Receipt PDF'}
             </button>
           )}
 
-          <button
-            onClick={sendAll}
-            disabled={!hasSendable || !totalAmount || parseFloat(totalAmount) <= 0}
-            className="w-full bg-primary-500 hover:bg-primary-600 active:bg-primary-700 disabled:opacity-40 disabled:cursor-not-allowed text-white font-bold py-4 rounded-2xl transition-colors flex items-center justify-center gap-2 text-base shadow-sm shadow-primary-200"
-          >
-            {isSending ? (
-              <><Loader2 size={18} className="animate-spin" /> Sending Payments…</>
-            ) : (
-              `Send All ${participants.length} Payment${participants.length !== 1 ? 's' : ''}`
-            )}
+          <button onClick={sendAll} disabled={!hasSendable || !totalAmount || parseFloat(totalAmount) <= 0}
+            className="w-full bg-primary-500 hover:bg-primary-600 active:bg-primary-700 active:scale-[0.98] disabled:opacity-40 disabled:cursor-not-allowed text-white font-bold py-4 rounded-2xl transition-all flex items-center justify-center gap-2 text-base shadow-sm shadow-primary-200">
+            {isSending
+              ? <><Loader2 size={18} className="animate-spin" /> Sending Payments…</>
+              : `Send All ${participants.length} Payment${participants.length !== 1 ? 's' : ''}`
+            }
           </button>
         </>
       )}
     </div>
+  );
+}
+
+export default function SplitPage() {
+  return (
+    <Suspense fallback={<div className="p-4 pt-8 flex justify-center"><Loader2 className="animate-spin text-primary-400" size={28} /></div>}>
+      <SplitPageContent />
+    </Suspense>
   );
 }

@@ -49,3 +49,11 @@ export interface TransactionStatus {
   signature?: string;
   error?: string;
 }
+
+export interface Contact {
+  id: string;
+  nickname: string;
+  address: string;
+  note?: string;
+  createdAt: string;
+}
