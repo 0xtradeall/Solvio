@@ -1,3 +1,5 @@
+const path = require('path');
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
@@ -11,6 +13,11 @@ const nextConfig = {
     NEXT_PUBLIC_USDC_MINT: '4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU',
   },
   webpack: (config, { isServer }) => {
+    config.resolve.alias = {
+      ...config.resolve.alias,
+      'buffer/': path.resolve(__dirname, 'node_modules/buffer/'),
+    };
+
     if (!isServer) {
       config.resolve.fallback = {
         ...config.resolve.fallback,
@@ -20,6 +27,7 @@ const nextConfig = {
         encoding: false,
         'pino-pretty': false,
         'supports-color': false,
+        buffer: require.resolve('buffer/'),
       };
     }
     return config;

@@ -18,6 +18,8 @@
     "@solana/wallet-adapter-wallets": "^0.19.32",
     "@solana/web3.js": "^1.87.6",
     "autoprefixer": "^10.4.27",
+    "borsh": "0.7.0",
+    "buffer": "^6.0.3",
     "date-fns": "^2.30.0",
     "jspdf": "^2.5.2",
     "jspdf-autotable": "^3.8.4",
