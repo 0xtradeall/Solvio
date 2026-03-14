@@ -147,7 +147,7 @@ function HeroSection() {
               alt={slide.alt}
               className="w-full h-full object-cover"
               loading={i === 0 ? 'eager' : 'lazy'}
-              style={isLast ? { filter: 'blur(2px)', transform: 'scale(1.03)' } : undefined}
+              style={isLast ? { filter: 'blur(1px)', transform: 'scale(1.015)' } : undefined}
             />
             {/* Extra dark overlay for last slide so image text doesn't compete with headline */}
             {isLast && (
