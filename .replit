@@ -26,7 +26,7 @@ outputType = "webview"
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
-args = "cd /home/runner/workspace && npm run dev"
+args = "cd /home/runner/workspace && fuser -k 5000/tcp 2>/dev/null || true && NEXT_TELEMETRY_DISABLED=1 NODE_OPTIONS='--max-old-space-size=1024' npm run dev"
 waitForPort = 5000
 
 [[ports]]
