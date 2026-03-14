@@ -3,7 +3,7 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { useWallet, useConnection } from '@solana/wallet-adapter-react';
 import { QRCodeSVG } from 'qrcode.react';
-import { Copy, Share2, Download, CheckCircle, Loader2, RefreshCw, ExternalLink, Users, X } from 'lucide-react';
+import { Copy, Share2, Download, CheckCircle, Loader2, RefreshCw, ExternalLink, Users, X, Lock, Globe } from 'lucide-react';
 import WalletConnectButton from '@/components/WalletConnectButton';
 import SnsAddressInput from '@/components/SnsAddressInput';
 import { generatePaymentUrl, pollForIncomingPayment, getTransactionExplorerUrl } from '@/lib/transactions';
@@ -336,18 +336,31 @@ export default function RequestPage() {
           {paymentUrl && (
             <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
               <div className="p-5 space-y-5">
-                <div className="flex items-center gap-2">
-                  <div className="w-8 h-8 bg-primary-100 rounded-lg flex items-center justify-center">
-                    <CheckCircle className="text-primary-600" size={18} />
+                <div className="flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-2">
+                    <div className="w-8 h-8 bg-primary-100 rounded-lg flex items-center justify-center">
+                      <CheckCircle className="text-primary-600" size={18} />
+                    </div>
+                    <div>
+                      <h2 className="font-bold text-gray-900">Payment Request Ready</h2>
+                      {resolvedSendTo && (
+                        <p className="text-xs text-primary-600 mt-0.5">
+                          Personalised for {sendToInput !== resolvedSendTo ? sendToInput : `${resolvedSendTo.slice(0, 6)}…${resolvedSendTo.slice(-4)}`}
+                        </p>
+                      )}
+                    </div>
                   </div>
-                  <div>
-                    <h2 className="font-bold text-gray-900">Payment Request Ready</h2>
-                    {resolvedSendTo && (
-                      <p className="text-xs text-primary-600 mt-0.5">
-                        Personalised for {sendToInput !== resolvedSendTo ? sendToInput : `${resolvedSendTo.slice(0, 6)}…${resolvedSendTo.slice(-4)}`}
-                      </p>
-                    )}
-                  </div>
+
+                  {/* Lock / Globe badge */}
+                  {resolvedSendTo ? (
+                    <span className="flex items-center gap-1 bg-amber-50 border border-amber-200 text-amber-700 text-xs font-semibold px-2.5 py-1 rounded-full flex-shrink-0">
+                      <Lock size={11} /> Private
+                    </span>
+                  ) : (
+                    <span className="flex items-center gap-1 bg-teal-50 border border-teal-200 text-teal-700 text-xs font-semibold px-2.5 py-1 rounded-full flex-shrink-0">
+                      <Globe size={11} /> Public
+                    </span>
+                  )}
                 </div>
 
                 <div className="flex justify-center py-3 bg-gray-50 rounded-2xl">

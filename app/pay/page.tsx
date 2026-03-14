@@ -1,9 +1,10 @@
 'use client';
 
 import { useSearchParams } from 'next/navigation';
+import Link from 'next/link';
 import { Suspense, useState, useEffect } from 'react';
 import { useWallet, useConnection } from '@solana/wallet-adapter-react';
-import { CheckCircle, XCircle, Loader2, ExternalLink, AlertCircle, Download, AlertTriangle, RefreshCw, Smartphone } from 'lucide-react';
+import { CheckCircle, XCircle, Loader2, ExternalLink, AlertCircle, Download, AlertTriangle, RefreshCw, Smartphone, Home } from 'lucide-react';
 import WalletConnectButton from '@/components/WalletConnectButton';
 import { sendPayment, getTransactionExplorerUrl } from '@/lib/transactions';
 import { validateSolanaAddress, validateAmount } from '@/lib/validators';
@@ -131,7 +132,7 @@ function PayPageContent() {
   const searchParams = useSearchParams();
   const wallet = useWallet();
   const { connection } = useConnection();
-  const { publicKey, connected } = wallet;
+  const { publicKey, connected, disconnect } = wallet;
   const hasPhantom = usePhantomDetection();
 
   const [txStatus, setTxStatus] = useState<'idle' | 'pending' | 'confirmed' | 'failed'>('idle');
@@ -209,6 +210,13 @@ function PayPageContent() {
     );
   }
 
+  const shortRecipient = recipient
+    ? `${recipient.slice(0, 6)}…${recipient.slice(-4)}`
+    : '';
+  const shortConnected = publicKey
+    ? `${publicKey.toBase58().slice(0, 6)}…${publicKey.toBase58().slice(-4)}`
+    : '';
+
   return (
     <div className="min-h-screen bg-gray-50 pb-8">
       {wrongNetwork && <NetworkWarning onDismiss={() => setWrongNetwork(false)} />}
@@ -240,47 +248,80 @@ function PayPageContent() {
           </div>
         </div>
 
-        {/* Personalised banner */}
-        {isPersonalised && (
-          <div className="bg-primary-50 border border-primary-200 rounded-2xl px-4 py-3 flex items-start gap-2.5">
-            <span className="text-lg flex-shrink-0">💜</span>
-            <div>
-              <p className="text-sm font-semibold text-primary-800">This payment request was sent to you personally</p>
-              <p className="text-xs text-primary-600 mt-0.5 font-mono">{recipient.slice(0, 8)}…{recipient.slice(-6)}</p>
-            </div>
-          </div>
-        )}
-
-        {/* Wallet mismatch warning */}
-        {walletMismatch && (
-          <div className="bg-yellow-50 border border-yellow-300 rounded-2xl px-4 py-3 flex items-start gap-2.5">
-            <span className="text-lg flex-shrink-0">⚠️</span>
-            <div>
-              <p className="text-sm font-semibold text-yellow-800">This link was intended for a different wallet</p>
-              <p className="text-xs text-yellow-700 mt-0.5">You can still pay — just make sure you intended to send from this wallet.</p>
-            </div>
-          </div>
-        )}
-
+        {/* ── No wallet connected yet: show connect prompt ── */}
         {!connected ? (
           <div className="space-y-3">
             <p className="text-sm text-gray-500 text-center">Connect your wallet to make this payment</p>
             <WalletConnectButton />
           </div>
+
+        /* ── Wrong network ── */
         ) : wrongNetwork ? (
           <div className="bg-yellow-50 border border-yellow-200 rounded-2xl p-4 text-center">
             <p className="text-yellow-800 font-semibold text-sm">Please switch to Devnet to continue</p>
           </div>
+
+        /* ── CASE 2 mismatch: BLOCK payment completely ── */
+        ) : walletMismatch ? (
+          <div className="bg-red-50 border-2 border-red-200 rounded-2xl p-6 text-center space-y-4">
+            <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto">
+              <span className="text-3xl">🔒</span>
+            </div>
+            <div className="space-y-1.5">
+              <p className="text-red-700 font-extrabold text-lg leading-snug">This link is not for your wallet</p>
+              <p className="text-sm text-gray-600 mt-2 leading-relaxed">
+                This payment was requested specifically from wallet
+              </p>
+              <p className="text-sm font-mono font-semibold text-gray-800 bg-gray-100 rounded-lg px-3 py-1.5 inline-block">
+                {shortRecipient}
+              </p>
+              <p className="text-sm text-gray-500 mt-1">You are connected as</p>
+              <p className="text-sm font-mono font-semibold text-gray-700 bg-gray-100 rounded-lg px-3 py-1.5 inline-block">
+                {shortConnected}
+              </p>
+              <p className="text-sm text-gray-500 mt-2">Please switch to the correct wallet.</p>
+            </div>
+            <div className="grid grid-cols-2 gap-3 pt-1">
+              <button
+                onClick={() => disconnect()}
+                className="flex items-center justify-center gap-2 bg-primary-500 hover:bg-primary-600 active:scale-95 text-white font-semibold py-3 rounded-xl transition-all text-sm"
+              >
+                🔄 Switch Wallet
+              </button>
+              <Link
+                href="/"
+                className="flex items-center justify-center gap-2 bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold py-3 rounded-xl transition-colors text-sm"
+              >
+                <Home size={15} /> Go Home
+              </Link>
+            </div>
+          </div>
+
+        /* ── CASE 1 / 2 match: payment form ── */
         ) : txStatus === 'idle' ? (
-          <button onClick={handlePay} className="w-full bg-primary-500 hover:bg-primary-600 active:scale-95 text-white font-bold py-4 rounded-2xl transition-all text-lg shadow-sm shadow-primary-200">
-            Pay {amount} {currency}
-          </button>
+          <div className="space-y-4">
+            {/* Friendly greeting for personalised links where wallet MATCHES */}
+            {isPersonalised && (
+              <div className="bg-primary-50 border border-primary-200 rounded-2xl px-4 py-3 flex items-center gap-2.5">
+                <span className="text-xl flex-shrink-0">👋</span>
+                <p className="text-sm font-semibold text-primary-800">This payment request was sent to you</p>
+              </div>
+            )}
+            <button
+              onClick={handlePay}
+              className="w-full bg-primary-500 hover:bg-primary-600 active:scale-95 text-white font-bold py-4 rounded-2xl transition-all text-lg shadow-sm shadow-primary-200"
+            >
+              Pay {amount} {currency}
+            </button>
+          </div>
+
         ) : txStatus === 'pending' ? (
           <div className="bg-yellow-50 border border-yellow-200 rounded-2xl p-6 text-center space-y-3">
             <Loader2 className="animate-spin text-yellow-600 mx-auto" size={36} />
             <p className="text-yellow-800 font-semibold">Sending Payment…</p>
             <p className="text-xs text-yellow-600">Please approve in Phantom</p>
           </div>
+
         ) : txStatus === 'confirmed' ? (
           <div className="bg-green-50 border-2 border-green-200 rounded-2xl p-6 text-center space-y-4">
             <CheckCircle className="text-green-500 mx-auto" size={48} />
@@ -300,6 +341,7 @@ function PayPageContent() {
               {pdfLoading ? 'Generating…' : 'Download Receipt PDF'}
             </button>
           </div>
+
         ) : (
           <div className="bg-red-50 border-2 border-red-200 rounded-2xl p-6 text-center space-y-4">
             <XCircle className="text-red-500 mx-auto" size={48} />
