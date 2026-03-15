@@ -1,7 +1,7 @@
 'use client';
 
-import { useState, useCallback, useEffect, useRef } from 'react';
-import { useWallet, useConnection } from '@solana/wallet-adapter-react';
+import { useState, useCallback, useEffect } from 'react';
+import { useWallet } from '@solana/wallet-adapter-react';
 import { useSearchParams } from 'next/navigation';
 import { Suspense } from 'react';
 import { Plus, Trash2, AlertCircle, CheckCircle, XCircle, Loader2, RefreshCw, Users, Lock, Copy, Share2, User, Search, X } from 'lucide-react';
@@ -9,7 +9,6 @@ import WalletConnectButton from '@/components/WalletConnectButton';
 import SnsAddressInput from '@/components/SnsAddressInput';
 import { validateSolanaAddress, validateAmount } from '@/lib/validators';
 import { isSNSInput } from '@/lib/sns';
-import { sendPayment } from '@/lib/transactions';
 import { saveReceipt } from '@/lib/storage';
 import { generateReceiptPDF } from '@/lib/pdf';
 import { generateSplitUrl } from '@/lib/transactions';
@@ -45,7 +44,6 @@ const makeParticipant = (nickname = '', walletAddress = ''): ParticipantState =>
 
 function SplitPageContent() {
   const wallet = useWallet();
-  const { connection } = useConnection();
   const { publicKey, connected } = wallet;
   const searchParams = useSearchParams();
 
@@ -56,11 +54,9 @@ function SplitPageContent() {
   const [participants, setParticipants] = useState<ParticipantState[]>([makeParticipant()]);
   const [isSending, setIsSending] = useState(false);
   const [hasSentAll, setHasSentAll] = useState(false);
-  const [summary, setSummary] = useState<{ confirmed: number; failed: number; total: number } | null>(null);
   const [totalError, setTotalError] = useState('');
   const [participantCountError, setParticipantCountError] = useState('');
   const [pdfGenerating, setPdfGenerating] = useState(false);
-  const [showSummaryModal, setShowSummaryModal] = useState(false);
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [splitId, setSplitId] = useState<string>('');
   const [currentSplit, setCurrentSplit] = useState<SplitData | null>(null);
@@ -82,14 +78,17 @@ function SplitPageContent() {
       const existingSplit = splits.find(s => s.id === splitId);
       if (existingSplit) {
         setCurrentSplit(existingSplit);
+        setHasSentAll(true);
+
         // Update participants status from split data
         const updatedParticipants = participants.map((p, i) => {
           const splitParticipant = existingSplit.participants.find(sp => sp.walletAddress === p.walletAddress);
           if (splitParticipant) {
             return {
               ...p,
-              status: splitParticipant.status === 'confirmed' ? 'confirmed' : p.status,
+              status: splitParticipant.status,
               txId: splitParticipant.txId || p.txId,
+              paidAt: splitParticipant.status === 'confirmed' ? p.paidAt || new Date().toISOString() : p.paidAt,
             };
           }
           return p;
@@ -114,11 +113,6 @@ function SplitPageContent() {
       setContacts([]);
     }
   }, [publicKey]);
-
-  const participantsRef = useRef<ParticipantState[]>(participants);
-  useEffect(() => {
-    participantsRef.current = participants;
-  }, [participants]);
 
   useEffect(() => {
     if (participants.length < 2) {
@@ -148,54 +142,37 @@ function SplitPageContent() {
   }, [equalSplit, totalAmount, participants.length]);
 
   useEffect(() => {
-    if (!connection || !publicKey || !hasSentAll) return;
+    if (!publicKey || !splitId || !hasSentAll) return;
 
-    const interval = setInterval(async () => {
-      const pending = participantsRef.current.filter(p => p.status === 'pending' && p.txId);
-      if (pending.length === 0) return;
+    const interval = setInterval(() => {
+      const splits = getSplits(publicKey.toBase58());
+      const existingSplit = splits.find(s => s.id === splitId);
+      if (!existingSplit) return;
 
-      try {
-        const statuses = await connection.getSignatureStatuses(pending.map(p => p.txId!));
-        const results = statuses?.value || [];
+      setParticipants(prev => {
+        const next = [...prev];
         let changed = false;
 
-        setParticipants(prev => {
-          const next = [...prev];
-          pending.forEach((p, idx) => {
-            const status = results[idx];
-            if (!status) return;
-            const sig = p.txId!;
-            const participantIndex = next.findIndex(x => x.txId === sig);
-            if (participantIndex === -1) return;
-
-            if ((status.confirmationStatus === 'confirmed' || status.confirmationStatus === 'finalized') && next[participantIndex].status !== 'confirmed') {
-              next[participantIndex] = {
-                ...next[participantIndex],
-                status: 'confirmed',
-                paidAt: new Date().toISOString(),
-              };
-              if (publicKey) updateSplitParticipantStatus(publicKey.toBase58(), splitId, next[participantIndex].walletAddress, 'confirmed', sig);
-              changed = true;
-            }
-
-            if (status.err && next[participantIndex].status !== 'failed') {
-              next[participantIndex] = {
-                ...next[participantIndex],
-                status: 'failed',
-                txError: JSON.stringify(status.err),
-              };
-              changed = true;
-            }
-          });
-          return changed ? next : prev;
+        existingSplit.participants.forEach(sp => {
+          const idx = next.findIndex(p => p.walletAddress === sp.walletAddress);
+          if (idx === -1) return;
+          if (next[idx].status !== sp.status || next[idx].txId !== sp.txId) {
+            next[idx] = {
+              ...next[idx],
+              status: sp.status,
+              txId: sp.txId,
+              paidAt: sp.status === 'confirmed' ? next[idx].paidAt || new Date().toISOString() : next[idx].paidAt,
+            };
+            changed = true;
+          }
         });
-      } catch {
-        // ignore polling errors
-      }
+
+        return changed ? next : prev;
+      });
     }, 10000);
 
     return () => clearInterval(interval);
-  }, [connection, publicKey, hasSentAll, splitId]);
+  }, [publicKey, splitId, hasSentAll]);
 
   const total = parseFloat(totalAmount) || 0;
   const perPerson = equalSplit && participants.length > 0 ? total / participants.length : 0;
@@ -390,21 +367,24 @@ function SplitPageContent() {
     if (!publicKey) return;
     setShowConfirmModal(false);
     if (!validateAll()) return;
+
     setHasSentAll(true);
-    setIsSending(true);
-    setSummary(null);
-    setShowSummaryModal(false);
 
-    const results: ParticipantState[] = [...participants];
+    const results: ParticipantState[] = participants.map((p, i) => ({
+      ...p,
+      status: 'pending',
+      txId: undefined,
+      txError: undefined,
+      paidAt: undefined,
+    }));
 
-    // Save split data
     const splitData: SplitData = {
       id: splitId,
       senderAddress: publicKey.toBase58(),
       totalAmount: total,
       currency,
       description,
-      participants: participants.map((p, i) => ({
+      participants: results.map((p, i) => ({
         id: `participant-${i}-${Date.now()}`,
         walletAddress: p.walletAddress,
         nickname: p.nickname || `Person ${i + 1}`,
@@ -413,69 +393,17 @@ function SplitPageContent() {
       })),
       createdAt: Date.now(),
     };
+
+    setParticipants(results);
     saveSplit(publicKey.toBase58(), splitData);
-
-    await Promise.allSettled(
-      participants.map(async (p, i) => {
-        if (p.status === 'confirmed') return;
-        results[i] = { ...results[i], status: 'pending', txId: undefined, txError: undefined };
-        setParticipants([...results]);
-        await sendPayment(connection, wallet, p.walletAddress, getShare(i), currency, (s) => {
-          results[i] = {
-            ...results[i],
-            status: s.status,
-            txId: s.signature,
-            txError: s.error,
-            paidAt: s.status === 'confirmed' ? new Date().toISOString() : results[i].paidAt,
-          };
-          setParticipants([...results]);
-          // Update split participant status
-          if (s.status === 'confirmed' && s.signature) {
-            updateSplitParticipantStatus(publicKey.toBase58(), splitId, p.walletAddress, 'confirmed', s.signature);
-          }
-        });
-      })
-    );
-
-    const confirmed = results.filter(p => p.status === 'confirmed').length;
-    const failed = results.filter(p => p.status === 'failed').length;
-    setSummary({ confirmed, failed, total: participants.length });
-    setShowSummaryModal(true);
-
-    if (confirmed > 0 && publicKey) {
-      const receipt: Receipt = {
-        id: Date.now().toString(), type: 'split', amount: total, currency,
-        date: new Date().toISOString(), note: description,
-        fromAddress: publicKey.toBase58(), toAddress: 'multiple',
-        participants: results.map((p, i) => ({
-          nickname: p.nickname || `Person ${i + 1}`,
-          address: p.walletAddress,
-          snsName: p.snsName,
-          amount: getShare(i),
-          status: p.status === 'idle' ? 'pending' : p.status,
-          txId: p.txId,
-        })),
-      };
-      saveReceipt(publicKey.toBase58(), receipt);
-    }
-    setIsSending(false);
+    setCurrentSplit(splitData);
   };
 
-  const retryOne = async (index: number) => {
-    if (!publicKey) return;
-    const p = participants[index];
+  const retryOne = (index: number) => {
     setParticipants(prev => {
       const next = [...prev];
       next[index] = { ...next[index], status: 'pending', txId: undefined, txError: undefined };
       return next;
-    });
-    const share = getShare(index);
-    await sendPayment(connection, wallet, p.walletAddress, share, currency, (s) => {
-      setParticipants(prev => {
-        const next = [...prev];
-        next[index] = { ...next[index], status: s.status, txId: s.signature, txError: s.error };
-        return next;
-      });
     });
   };
 
@@ -600,19 +528,6 @@ function SplitPageContent() {
         </div>
       ) : (
         <>
-          {showSummaryModal && summary && (
-            <div className={`rounded-2xl p-4 border flex items-start gap-3 ${summary.failed > 0 ? 'bg-yellow-50 border-yellow-200' : 'bg-green-50 border-green-200'}`}>
-              <div className="flex-1">
-                <p className={`font-bold ${summary.failed > 0 ? 'text-yellow-800' : 'text-green-800'}`}>
-                  {summary.failed > 0 ? '⚠️ Partial Success' : '✅ All Payments Sent'}
-                </p>
-                <p className={`text-sm mt-0.5 ${summary.failed > 0 ? 'text-yellow-700' : 'text-green-700'}`}>
-                  {summary.confirmed}/{summary.total} confirmed{summary.failed > 0 ? `, ${summary.failed} failed` : ''}
-                </p>
-              </div>
-              <button onClick={() => setShowSummaryModal(false)} className="text-gray-400 hover:text-gray-600 text-lg">×</button>
-            </div>
-          )}
 
           {currentSplit && currentSplit.participants.every(p => p.status === 'confirmed') && (
             <div className="bg-green-50 border-2 border-green-200 rounded-2xl p-4 text-center">
@@ -791,18 +706,16 @@ function SplitPageContent() {
             </button>
           )}
 
-          {!hasSentAll && (
-            <div title={!isFormValid ? 'Fill in all required fields to continue' : undefined}>
-              <button onClick={() => handleSendAllClick()}
-                disabled={!isFormValid || isSending}
-                className="w-full bg-primary-500 hover:bg-primary-600 active:bg-primary-700 active:scale-[0.98] disabled:opacity-40 disabled:cursor-not-allowed text-white font-bold py-4 rounded-2xl transition-all flex items-center justify-center gap-2 text-base shadow-sm shadow-primary-200">
-                {isSending
-                  ? <><Loader2 size={18} className="animate-spin" /> Sending Payments…</>
-                  : `Send All ${participants.length} Payment${participants.length !== 1 ? 's' : ''}`
-                }
-              </button>
-            </div>
-          )}
+          <div title={!isFormValid ? 'Fill in all required fields to continue' : undefined}>
+            <button onClick={() => handleSendAllClick()}
+              disabled={!isFormValid || hasSentAll}
+              className="w-full bg-primary-500 hover:bg-primary-600 active:bg-primary-700 active:scale-[0.98] disabled:opacity-40 disabled:cursor-not-allowed text-white font-bold py-4 rounded-2xl transition-all flex items-center justify-center gap-2 text-base shadow-sm shadow-primary-200">
+              {hasSentAll
+                ? '✅ Payment requests generated!'
+                : 'Generate Payment Links'
+              }
+            </button>
+          </div>
 
           {showConfirmModal && (
             <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
@@ -847,7 +760,7 @@ function SplitPageContent() {
                   </button>
                   <button onClick={() => sendAll()}
                     className="flex-1 bg-primary-500 hover:bg-primary-600 text-white font-semibold py-3 rounded-xl transition-colors">
-                    Confirm & Send All
+                    Generate Links
                   </button>
                 </div>
               </div>
