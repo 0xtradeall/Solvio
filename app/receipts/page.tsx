@@ -261,6 +261,43 @@ export default function ReceiptsPage() {
     setDownloading(prev => ({ ...prev, [`split-${split.id}`]: false }));
   };
 
+  const handleParticipantReceiptDownload = async (split: SplitData, participant: SplitData['participants'][0]) => {
+    if (!publicKey || !participant.txId) return;
+    const key = `participant-${split.id}-${participant.walletAddress}`;
+    const receipt: Receipt = {
+      id: `${split.id}-${participant.walletAddress}`,
+      type: 'split',
+      amount: participant.amount,
+      currency: split.currency,
+      date: new Date().toISOString(),
+      note: `${split.description}\nPart of split: ${split.participants.findIndex(p => p.walletAddress === participant.walletAddress) + 1} of ${split.participants.length} payments\nPayment Confirmed`,
+      fromAddress: participant.walletAddress,
+      toAddress: split.senderAddress,
+      txId: participant.txId,
+      participants: [
+        {
+          nickname: participant.nickname,
+          address: participant.walletAddress,
+          amount: participant.amount,
+          status: participant.status,
+          txId: participant.txId,
+        },
+      ],
+    };
+
+    setDownloading(prev => ({ ...prev, [key]: true }));
+    try { await generateReceiptPDF(receipt); } catch (e) { console.error(e); }
+    setDownloading(prev => ({ ...prev, [key]: false }));
+  };
+
+  const shareParticipantReceiptWhatsApp = (split: SplitData, participant: SplitData['participants'][0]) => {
+    if (!participant.txId) return;
+    const txLink = `https://solscan.io/tx/${participant.txId}?cluster=devnet`;
+    const message = `Here is your payment receipt from Solvio: ${participant.amount} ${split.currency} - ${split.description}\nTx: ${txLink}`;
+    const whatsappUrl = `https://wa.me/?text=${encodeURIComponent(message)}`;
+    window.open(whatsappUrl, '_blank');
+  };
+
   const handleWhatsApp = (receipt: Receipt) => {
     const amtStr = `${receipt.amount} ${receipt.currency}`;
     const dateStr = format(new Date(receipt.date), 'MMM d, yyyy');
@@ -352,14 +389,33 @@ export default function ReceiptsPage() {
                             </div>
                             <div className="flex items-center gap-2">
                               {participant.status === 'confirmed' && participant.txId && (
-                                <a
-                                  href={`https://solscan.io/tx/${participant.txId}?cluster=devnet`}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className="text-xs text-secondary-600 underline"
-                                >
-                                  <ExternalLink size={12} />
-                                </a>
+                                <>
+                                  <a
+                                    href={`https://solscan.io/tx/${participant.txId}?cluster=devnet`}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="text-xs text-secondary-600 underline"
+                                  >
+                                    <ExternalLink size={12} />
+                                  </a>
+                                  <button
+                                    onClick={() => handleParticipantReceiptDownload(split, participant)}
+                                    disabled={downloading[`participant-${split.id}-${participant.walletAddress}`]}
+                                    className="text-xs bg-gray-200 hover:bg-gray-300 text-gray-700 px-2 py-1 rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                  >
+                                    {downloading[`participant-${split.id}-${participant.walletAddress}`] ? (
+                                      <Loader2 size={12} className="animate-spin" />
+                                    ) : (
+                                      <Download size={12} />
+                                    )} Receipt
+                                  </button>
+                                  <button
+                                    onClick={() => shareParticipantReceiptWhatsApp(split, participant)}
+                                    className="text-xs bg-green-100 hover:bg-green-200 text-green-700 px-2 py-1 rounded transition-colors"
+                                  >
+                                    <Share2 size={12} /> Share
+                                  </button>
+                                </>
                               )}
                               {participant.status === 'pending' && (
                                 <>
