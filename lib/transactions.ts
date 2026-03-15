@@ -161,6 +161,7 @@ async function sendUSDCPayment(
     transaction.feePayer = senderPubkey;
 
     const signature = await wallet.sendTransaction(transaction, connection);
+    onStatus({ status: 'pending', signature });
     await connection.confirmTransaction({ signature, blockhash, lastValidBlockHeight }, 'confirmed');
 
     const result: TransactionStatus = { status: 'confirmed', signature };
@@ -209,6 +210,7 @@ export async function sendSOLPayment(
     transaction.feePayer = wallet.publicKey;
 
     const signature = await wallet.sendTransaction(transaction, connection);
+    onStatus({ status: 'pending', signature });
     await connection.confirmTransaction({ signature, blockhash, lastValidBlockHeight }, 'confirmed');
 
     const result: TransactionStatus = { status: 'confirmed', signature };

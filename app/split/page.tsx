@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import { useWallet, useConnection } from '@solana/wallet-adapter-react';
 import { useSearchParams } from 'next/navigation';
 import { Suspense } from 'react';
@@ -28,6 +28,7 @@ interface ParticipantState {
   status: TxStatus | 'idle';
   txId?: string;
   txError?: string;
+  paidAt?: string;
 }
 
 const makeParticipant = (nickname = '', walletAddress = ''): ParticipantState => ({
@@ -39,6 +40,7 @@ const makeParticipant = (nickname = '', walletAddress = ''): ParticipantState =>
   addressError: '',
   amountError: '',
   status: 'idle',
+  paidAt: undefined,
 });
 
 function SplitPageContent() {
@@ -53,6 +55,7 @@ function SplitPageContent() {
   const [equalSplit, setEqualSplit] = useState(true);
   const [participants, setParticipants] = useState<ParticipantState[]>([makeParticipant()]);
   const [isSending, setIsSending] = useState(false);
+  const [hasSentAll, setHasSentAll] = useState(false);
   const [summary, setSummary] = useState<{ confirmed: number; failed: number; total: number } | null>(null);
   const [totalError, setTotalError] = useState('');
   const [participantCountError, setParticipantCountError] = useState('');
@@ -112,6 +115,11 @@ function SplitPageContent() {
     }
   }, [publicKey]);
 
+  const participantsRef = useRef<ParticipantState[]>(participants);
+  useEffect(() => {
+    participantsRef.current = participants;
+  }, [participants]);
+
   useEffect(() => {
     if (participants.length < 2) {
       setParticipantCountError('Add at least 2 people to split the bill');
@@ -138,6 +146,56 @@ function SplitPageContent() {
       return updated ? next : prev;
     });
   }, [equalSplit, totalAmount, participants.length]);
+
+  useEffect(() => {
+    if (!connection || !publicKey || !hasSentAll) return;
+
+    const interval = setInterval(async () => {
+      const pending = participantsRef.current.filter(p => p.status === 'pending' && p.txId);
+      if (pending.length === 0) return;
+
+      try {
+        const statuses = await connection.getSignatureStatuses(pending.map(p => p.txId!));
+        const results = statuses?.value || [];
+        let changed = false;
+
+        setParticipants(prev => {
+          const next = [...prev];
+          pending.forEach((p, idx) => {
+            const status = results[idx];
+            if (!status) return;
+            const sig = p.txId!;
+            const participantIndex = next.findIndex(x => x.txId === sig);
+            if (participantIndex === -1) return;
+
+            if ((status.confirmationStatus === 'confirmed' || status.confirmationStatus === 'finalized') && next[participantIndex].status !== 'confirmed') {
+              next[participantIndex] = {
+                ...next[participantIndex],
+                status: 'confirmed',
+                paidAt: new Date().toISOString(),
+              };
+              if (publicKey) updateSplitParticipantStatus(publicKey.toBase58(), splitId, next[participantIndex].walletAddress, 'confirmed', sig);
+              changed = true;
+            }
+
+            if (status.err && next[participantIndex].status !== 'failed') {
+              next[participantIndex] = {
+                ...next[participantIndex],
+                status: 'failed',
+                txError: JSON.stringify(status.err),
+              };
+              changed = true;
+            }
+          });
+          return changed ? next : prev;
+        });
+      } catch {
+        // ignore polling errors
+      }
+    }, 10000);
+
+    return () => clearInterval(interval);
+  }, [connection, publicKey, hasSentAll, splitId]);
 
   const total = parseFloat(totalAmount) || 0;
   const perPerson = equalSplit && participants.length > 0 ? total / participants.length : 0;
@@ -332,6 +390,7 @@ function SplitPageContent() {
     if (!publicKey) return;
     setShowConfirmModal(false);
     if (!validateAll()) return;
+    setHasSentAll(true);
     setIsSending(true);
     setSummary(null);
     setShowSummaryModal(false);
@@ -362,7 +421,13 @@ function SplitPageContent() {
         results[i] = { ...results[i], status: 'pending', txId: undefined, txError: undefined };
         setParticipants([...results]);
         await sendPayment(connection, wallet, p.walletAddress, getShare(i), currency, (s) => {
-          results[i] = { ...results[i], status: s.status, txId: s.signature, txError: s.error };
+          results[i] = {
+            ...results[i],
+            status: s.status,
+            txId: s.signature,
+            txError: s.error,
+            paidAt: s.status === 'confirmed' ? new Date().toISOString() : results[i].paidAt,
+          };
           setParticipants([...results]);
           // Update split participant status
           if (s.status === 'confirmed' && s.signature) {
@@ -435,16 +500,16 @@ function SplitPageContent() {
   };
 
   const statusBadge = (status: TxStatus | 'idle') => {
-    if (status === 'pending') return <span className="flex items-center gap-1 text-xs font-semibold text-yellow-700 bg-yellow-100 px-2 py-0.5 rounded-full"><Loader2 size={11} className="animate-spin" />Pending</span>;
-    if (status === 'confirmed') return <span className="flex items-center gap-1 text-xs font-semibold text-green-700 bg-green-100 px-2 py-0.5 rounded-full"><CheckCircle size={11} />Confirmed</span>;
-    if (status === 'failed') return <span className="flex items-center gap-1 text-xs font-semibold text-red-700 bg-red-100 px-2 py-0.5 rounded-full"><XCircle size={11} />Failed</span>;
+    if (status === 'pending') return <span className="flex items-center gap-1 text-xs font-semibold text-yellow-800 bg-yellow-100 px-2 py-0.5 rounded-full animate-pulse"><span className="text-sm">⏳</span>Waiting for payment</span>;
+    if (status === 'confirmed') return <span className="flex items-center gap-1 text-xs font-semibold text-green-800 bg-green-100 px-2 py-0.5 rounded-full"><span className="text-sm">✅</span>Confirmed</span>;
+    if (status === 'failed') return <span className="flex items-center gap-1 text-xs font-semibold text-red-800 bg-red-100 px-2 py-0.5 rounded-full"><span className="text-sm">❌</span>Payment failed</span>;
     return null;
   };
 
   const cardBorder = (status: TxStatus | 'idle') => {
-    if (status === 'confirmed') return 'border-green-200 bg-green-50/30';
-    if (status === 'failed') return 'border-red-200 bg-red-50/30';
-    if (status === 'pending') return 'border-yellow-200 bg-yellow-50/30';
+    if (status === 'confirmed') return 'border-green-200 bg-green-50/40';
+    if (status === 'failed') return 'border-red-200 bg-red-50/40';
+    if (status === 'pending') return 'border-yellow-200 bg-yellow-50/40';
     return 'border-gray-200 bg-white';
   };
 
@@ -489,7 +554,16 @@ function SplitPageContent() {
     return !!p.walletAddress && validateSolanaAddress(p.walletAddress) && share > 0 && !p.addressError && !p.amountError;
   });
   const isFormValid = formHasRequiredFields && participantsValid && !totalError && !participantCountError;
+
+  const confirmedCount = participants.filter(p => p.status === 'confirmed').length;
+  const pendingCount = participants.filter(p => p.status === 'pending').length;
+  const failedCount = participants.filter(p => p.status === 'failed').length;
+  const totalCount = participants.length;
+  const allConfirmed = totalCount > 0 && confirmedCount === totalCount;
+
   const anyDone = participants.some(p => p.status === 'confirmed' || p.status === 'failed');
+  const showStatusBar = hasSentAll || anyDone;
+  const progressPercent = totalCount ? Math.round((confirmedCount / totalCount) * 100) : 0;
 
   return (
     <div className="p-4 space-y-5">
@@ -497,6 +571,24 @@ function SplitPageContent() {
         <h1 className="text-2xl font-bold text-gray-900">Split the Bill</h1>
         <p className="text-sm text-gray-500 mt-0.5">Pay multiple people simultaneously</p>
       </div>
+
+      {showStatusBar && (
+        <div className="bg-white rounded-2xl p-4 border border-gray-100 shadow-sm">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+            <div className="text-sm font-semibold text-gray-700">
+              {allConfirmed
+                ? `🎉 Split complete! All ${totalCount} payments confirmed.`
+                : `Split status: ${confirmedCount}/${totalCount} confirmed • ${pendingCount} pending${failedCount ? ` • ${failedCount} failed` : ''}`}
+            </div>
+            <div className="text-xs text-gray-500">
+              {allConfirmed ? `${progressPercent}% collected` : `${progressPercent}% collected`}
+            </div>
+          </div>
+          <div className="h-2 w-full bg-gray-200 rounded-full overflow-hidden mt-3">
+            <div className={`${allConfirmed ? 'bg-green-500' : 'bg-primary-500'} h-full`} style={{ width: `${progressPercent}%` }} />
+          </div>
+        </div>
+      )}
 
       {!connected ? (
         <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100 text-center space-y-4">
@@ -573,6 +665,12 @@ function SplitPageContent() {
           </div>
 
           <div className="space-y-3">
+            {hasSentAll && !allConfirmed && (
+              <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-4 text-emerald-800">
+                <p className="font-semibold">✅ Payment requests sent to all {totalCount} participants!</p>
+                <p className="text-sm text-emerald-700 mt-1">Share the links below with each person.</p>
+              </div>
+            )}
             <div className="flex items-center justify-between">
               <div>
                 <h2 className="font-bold text-gray-900">Participants <span className="text-gray-400 font-normal text-sm">({participants.length}/10)</span></h2>
@@ -616,6 +714,13 @@ function SplitPageContent() {
                     )}
                   </div>
                 </div>
+                {(p.status === 'confirmed' || p.status === 'pending') && (
+                  <p className="text-xs mt-1 text-gray-600">
+                    {p.status === 'confirmed'
+                      ? `Payment received${p.paidAt ? ` — ${new Date(p.paidAt).toLocaleString()}` : ''}`
+                      : `Link sent — waiting for ${getParticipantName(p, i)} to pay`}
+                  </p>
+                )}
                 <input type="text" value={p.nickname} onChange={e => updateParticipant(i, 'nickname', e.target.value)}
                   placeholder="Name or nickname" disabled={isSending || p.status === 'confirmed'}
                   className="w-full border-2 border-gray-200 focus:border-primary-400 rounded-xl p-2.5 text-sm focus:outline-none transition-colors disabled:opacity-60" />
@@ -642,19 +747,19 @@ function SplitPageContent() {
                 ) : total > 0 ? (
                   <p className={`text-xs ${p.amountError ? 'text-red-500' : 'text-gray-400'}`}>Share: <span className="font-bold text-primary-600">{perPerson.toFixed(6)} {currency}</span></p>
                 ) : null}
-                {isFormValid && p.walletAddress && validateSolanaAddress(p.walletAddress) && (
+                {(p.walletAddress && validateSolanaAddress(p.walletAddress) && (hasSentAll || isFormValid)) && (
                   <div className="flex gap-2 pt-2">
                     <button
                       onClick={() => copyLink(generateParticipantLink(p, i))}
                       className="flex items-center gap-1 bg-gray-100 hover:bg-gray-200 text-gray-700 text-xs font-semibold px-3 py-1.5 rounded-lg transition-colors"
-                      title={!isFormValid ? 'Fill in all required fields to continue' : undefined}
+                      title={hasSentAll ? undefined : 'Fill in all required fields to continue'}
                     >
                       <Copy size={12} /> Copy Link
                     </button>
                     <button
                       onClick={() => shareViaWhatsApp(generateParticipantLink(p, i), p)}
                       className="flex items-center gap-1 bg-green-100 hover:bg-green-200 text-green-700 text-xs font-semibold px-3 py-1.5 rounded-lg transition-colors"
-                      title={!isFormValid ? 'Fill in all required fields to continue' : undefined}
+                      title={hasSentAll ? undefined : 'Fill in all required fields to continue'}
                     >
                       <Share2 size={12} /> WhatsApp
                     </button>
@@ -678,7 +783,7 @@ function SplitPageContent() {
             ))}
           </div>
 
-          {anyDone && (
+          {allConfirmed && (
             <button onClick={handleDownloadPDF} disabled={pdfGenerating}
               className="w-full flex items-center justify-center gap-2 border-2 border-primary-200 text-primary-600 hover:bg-primary-50 active:scale-95 font-semibold py-3.5 rounded-xl transition-all">
               {pdfGenerating ? <Loader2 size={16} className="animate-spin" /> : null}
@@ -686,16 +791,18 @@ function SplitPageContent() {
             </button>
           )}
 
-          <div title={!isFormValid ? 'Fill in all required fields to continue' : undefined}>
-            <button onClick={() => handleSendAllClick()}
-              disabled={!isFormValid || isSending}
-              className="w-full bg-primary-500 hover:bg-primary-600 active:bg-primary-700 active:scale-[0.98] disabled:opacity-40 disabled:cursor-not-allowed text-white font-bold py-4 rounded-2xl transition-all flex items-center justify-center gap-2 text-base shadow-sm shadow-primary-200">
-              {isSending
-                ? <><Loader2 size={18} className="animate-spin" /> Sending Payments…</>
-                : `Send All ${participants.length} Payment${participants.length !== 1 ? 's' : ''}`
-              }
-            </button>
-          </div>
+          {!hasSentAll && (
+            <div title={!isFormValid ? 'Fill in all required fields to continue' : undefined}>
+              <button onClick={() => handleSendAllClick()}
+                disabled={!isFormValid || isSending}
+                className="w-full bg-primary-500 hover:bg-primary-600 active:bg-primary-700 active:scale-[0.98] disabled:opacity-40 disabled:cursor-not-allowed text-white font-bold py-4 rounded-2xl transition-all flex items-center justify-center gap-2 text-base shadow-sm shadow-primary-200">
+                {isSending
+                  ? <><Loader2 size={18} className="animate-spin" /> Sending Payments…</>
+                  : `Send All ${participants.length} Payment${participants.length !== 1 ? 's' : ''}`
+                }
+              </button>
+            </div>
+          )}
 
           {showConfirmModal && (
             <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
