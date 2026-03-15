@@ -204,10 +204,11 @@ function SplitPageContent() {
           currency,
           description,
           participants: next.map((p, i) => ({
-            address: p.address,
+            id: `participant-${i}-${Date.now()}`,
+            walletAddress: p.walletAddress,
             nickname: p.nickname || `Person ${i + 1}`,
             amount: getShare(i),
-            status: 'pending',
+            status: "pending" as const
           })),
           createdAt: new Date().toISOString(),
         };
@@ -266,10 +267,11 @@ function SplitPageContent() {
       currency,
       description,
       participants: participants.map((p, i) => ({
+        id: `participant-${i}-${Date.now()}`,
         walletAddress: p.walletAddress,
         nickname: p.nickname || `Person ${i + 1}`,
         amount: getShare(i),
-        status: 'pending',
+        status: 'pending' as const,
       })),
       createdAt: new Date().toISOString(),
     };
