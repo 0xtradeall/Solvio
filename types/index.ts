@@ -51,7 +51,7 @@ export interface SplitData {
   totalAmount: number;
   currency: 'SOL' | 'USDC';
   createdAt: number;
-  createdBy: string;
+  senderAddress: string;
   participants: {
     id: string;
     nickname: string;
