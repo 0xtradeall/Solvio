@@ -4,7 +4,7 @@ import { useState, useCallback, useEffect } from 'react';
 import { useWallet, useConnection } from '@solana/wallet-adapter-react';
 import { useSearchParams } from 'next/navigation';
 import { Suspense } from 'react';
-import { Plus, Trash2, AlertCircle, CheckCircle, XCircle, Loader2, RefreshCw, Users, Lock, Copy, Share2 } from 'lucide-react';
+import { Plus, Trash2, AlertCircle, CheckCircle, XCircle, Loader2, RefreshCw, Users, Lock, Copy, Share2, User, Search, X } from 'lucide-react';
 import WalletConnectButton from '@/components/WalletConnectButton';
 import SnsAddressInput from '@/components/SnsAddressInput';
 import { validateSolanaAddress, validateAmount } from '@/lib/validators';
@@ -14,7 +14,8 @@ import { saveReceipt } from '@/lib/storage';
 import { generateReceiptPDF } from '@/lib/pdf';
 import { generateSplitUrl } from '@/lib/transactions';
 import { saveSplit, updateSplitParticipantStatus, getSplits, SplitData } from '@/lib/storage';
-import { Currency, TxStatus, Receipt } from '@/types';
+import { getContacts } from '@/lib/storage';
+import { Currency, TxStatus, Receipt, Contact } from '@/types';
 
 interface ParticipantState {
   nickname: string;
@@ -56,6 +57,10 @@ function SplitPageContent() {
   const [showSummaryModal, setShowSummaryModal] = useState(false);
   const [splitId, setSplitId] = useState<string>('');
   const [currentSplit, setCurrentSplit] = useState<SplitData | null>(null);
+  const [showContactsModal, setShowContactsModal] = useState(false);
+  const [contacts, setContacts] = useState<Contact[]>([]);
+  const [selectedContacts, setSelectedContacts] = useState<Set<string>>(new Set());
+  const [contactsSearchQuery, setContactsSearchQuery] = useState('');
 
   useEffect(() => {
     // Generate unique split ID
@@ -95,6 +100,14 @@ function SplitPageContent() {
     }
   }, [searchParams]);
 
+  useEffect(() => {
+    if (publicKey) {
+      setContacts(getContacts(publicKey.toBase58()));
+    } else {
+      setContacts([]);
+    }
+  }, [publicKey]);
+
   const total = parseFloat(totalAmount) || 0;
   const perPerson = equalSplit && participants.length > 0 ? total / participants.length : 0;
 
@@ -106,6 +119,52 @@ function SplitPageContent() {
   const addParticipant = () => {
     if (participants.length >= 10) return;
     setParticipants(p => [...p, makeParticipant()]);
+  };
+
+  const openContactsModal = () => {
+    setShowContactsModal(true);
+    setSelectedContacts(new Set());
+    setContactsSearchQuery('');
+  };
+
+  const closeContactsModal = () => {
+    setShowContactsModal(false);
+    setSelectedContacts(new Set());
+    setContactsSearchQuery('');
+  };
+
+  const toggleContactSelection = (contactId: string) => {
+    const newSelected = new Set(selectedContacts);
+    if (newSelected.has(contactId)) {
+      newSelected.delete(contactId);
+    } else {
+      newSelected.add(contactId);
+    }
+    setSelectedContacts(newSelected);
+  };
+
+  const addSelectedContacts = () => {
+    const selectedContactsList = contacts.filter(c => selectedContacts.has(c.id));
+    const newParticipants = selectedContactsList.map(c => makeParticipant(c.nickname, c.address));
+    
+    // Check if we would exceed the limit
+    if (participants.length + newParticipants.length > 10) {
+      // Add as many as possible
+      const availableSlots = 10 - participants.length;
+      newParticipants.splice(availableSlots);
+    }
+    
+    setParticipants(p => [...p, ...newParticipants]);
+    closeContactsModal();
+  };
+
+  const filteredContacts = contacts.filter(c => 
+    c.nickname.toLowerCase().includes(contactsSearchQuery.toLowerCase()) ||
+    c.address.toLowerCase().includes(contactsSearchQuery.toLowerCase())
+  );
+
+  const isContactAlreadyAdded = (contact: Contact) => {
+    return participants.some(p => p.address === contact.address);
   };
 
   const removeParticipant = (index: number) => {
@@ -423,10 +482,16 @@ function SplitPageContent() {
           <div className="space-y-3">
             <div className="flex items-center justify-between">
               <h2 className="font-bold text-gray-900">Participants <span className="text-gray-400 font-normal text-sm">({participants.length}/10)</span></h2>
-              <button onClick={addParticipant} disabled={participants.length >= 10 || isSending}
-                className="flex items-center gap-1 text-primary-600 hover:text-primary-700 font-semibold text-sm disabled:opacity-40 transition-colors">
-                <Plus size={16} /> Add Person
-              </button>
+              <div className="flex items-center gap-2">
+                <button onClick={openContactsModal} disabled={participants.length >= 10 || isSending}
+                  className="flex items-center gap-1 text-secondary-600 hover:text-secondary-700 font-semibold text-sm disabled:opacity-40 transition-colors">
+                  <User size={16} /> From Contacts
+                </button>
+                <button onClick={addParticipant} disabled={participants.length >= 10 || isSending}
+                  className="flex items-center gap-1 text-primary-600 hover:text-primary-700 font-semibold text-sm disabled:opacity-40 transition-colors">
+                  <Plus size={16} /> Add Person
+                </button>
+              </div>
             </div>
 
             {participants.map((p, i) => (
@@ -524,6 +589,113 @@ function SplitPageContent() {
               : `Send All ${participants.length} Payment${participants.length !== 1 ? 's' : ''}`
             }
           </button>
+
+          {/* Contacts Modal */}
+          {showContactsModal && (
+            <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-in fade-in duration-200">
+              <div className="bg-white/95 backdrop-blur-md rounded-3xl shadow-2xl max-w-md w-full max-h-[80vh] overflow-hidden animate-in zoom-in-95 duration-200">
+                <div className="p-6 border-b border-gray-100">
+                  <div className="flex items-center justify-between mb-4">
+                    <h3 className="text-xl font-bold text-gray-900">Select Contacts</h3>
+                    <button onClick={closeContactsModal} className="text-gray-400 hover:text-gray-600 transition-colors">
+                      <X size={24} />
+                    </button>
+                  </div>
+                  
+                  {/* Search Bar */}
+                  <div className="relative">
+                    <Search size={18} className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
+                    <input
+                      type="text"
+                      placeholder="Search contacts..."
+                      value={contactsSearchQuery}
+                      onChange={(e) => setContactsSearchQuery(e.target.value)}
+                      className="w-full pl-10 pr-4 py-3 border-2 border-gray-200 focus:border-primary-400 rounded-xl focus:outline-none transition-colors"
+                    />
+                  </div>
+                </div>
+
+                <div className="max-h-96 overflow-y-auto">
+                  {contacts.length === 0 ? (
+                    <div className="p-8 text-center space-y-4">
+                      <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto">
+                        <User size={24} className="text-gray-400" />
+                      </div>
+                      <div>
+                        <p className="text-gray-900 font-semibold">No contacts yet</p>
+                        <p className="text-gray-500 text-sm mt-1">Add contacts in the Contacts tab first.</p>
+                      </div>
+                      <button
+                        onClick={() => {
+                          closeContactsModal();
+                          // Navigate to contacts - we'll use window.location for simplicity
+                          window.location.href = '/contacts';
+                        }}
+                        className="inline-flex items-center gap-2 bg-primary-500 hover:bg-primary-600 text-white font-semibold px-4 py-2 rounded-lg transition-colors"
+                      >
+                        Go to Contacts →
+                      </button>
+                    </div>
+                  ) : filteredContacts.length === 0 ? (
+                    <div className="p-8 text-center">
+                      <p className="text-gray-500">No contacts match your search.</p>
+                    </div>
+                  ) : (
+                    <div className="divide-y divide-gray-100">
+                      {filteredContacts.map((contact) => {
+                        const alreadyAdded = isContactAlreadyAdded(contact);
+                        return (
+                          <div
+                            key={contact.id}
+                            className={`p-4 flex items-center gap-3 hover:bg-gray-50 transition-colors ${
+                              alreadyAdded ? 'opacity-50' : ''
+                            }`}
+                          >
+                            <input
+                              type="checkbox"
+                              checked={selectedContacts.has(contact.id)}
+                              onChange={() => toggleContactSelection(contact.id)}
+                              disabled={alreadyAdded}
+                              className="w-5 h-5 text-primary-600 bg-gray-100 border-gray-300 rounded focus:ring-primary-500 focus:ring-2 disabled:opacity-50"
+                            />
+                            <div className="flex-1 min-w-0">
+                              <p className="font-semibold text-gray-900 truncate">{contact.nickname}</p>
+                              <p className="text-sm text-gray-500 truncate">
+                                {contact.address.slice(0, 8)}...{contact.address.slice(-8)}
+                              </p>
+                              {alreadyAdded && (
+                                <p className="text-xs text-gray-400 mt-1">Already added</p>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+
+                {contacts.length > 0 && (
+                  <div className="p-6 border-t border-gray-100 bg-gray-50">
+                    <div className="flex gap-3">
+                      <button
+                        onClick={closeContactsModal}
+                        className="flex-1 bg-gray-200 hover:bg-gray-300 text-gray-700 font-semibold py-3 rounded-xl transition-colors"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        onClick={addSelectedContacts}
+                        disabled={selectedContacts.size === 0}
+                        className="flex-1 bg-primary-500 hover:bg-primary-600 disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold py-3 rounded-xl transition-colors"
+                      >
+                        Add Selected ({selectedContacts.size})
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
         </>
       )}
     </div>
