@@ -147,6 +147,50 @@ export function updateSplitParticipantStatus(
     if (txId) participant.txId = txId;
 
     saveSplit(walletAddress, split);
+
+    // Also update active split if it matches
+    const active = getActiveSplit(walletAddress);
+    if (active && active.id === splitId) {
+      const activeParticipant = active.participants.find(p => p.walletAddress === participantAddress);
+      if (activeParticipant) {
+        activeParticipant.status = status;
+        if (txId) activeParticipant.txId = txId;
+        saveActiveSplit(walletAddress, active);
+      }
+    }
+  } catch {}
+}
+
+export function getActiveSplitKey(walletAddress: string): string {
+  return `solvio_active_split_${walletAddress}`;
+}
+
+export function getActiveSplit(walletAddress: string): SplitData | null {
+  if (!isStorageAvailable()) return null;
+  try {
+    const stored = localStorage.getItem(getActiveSplitKey(walletAddress));
+    if (!stored) return null;
+    return JSON.parse(stored);
+  } catch {
+    return null;
+  }
+}
+
+export function saveActiveSplit(walletAddress: string, split: SplitData | null): void {
+  if (!isStorageAvailable()) return;
+  try {
+    if (split) {
+      localStorage.setItem(getActiveSplitKey(walletAddress), JSON.stringify(split));
+    } else {
+      localStorage.removeItem(getActiveSplitKey(walletAddress));
+    }
+  } catch {}
+}
+
+export function clearActiveSplit(walletAddress: string): void {
+  if (!isStorageAvailable()) return;
+  try {
+    localStorage.removeItem(getActiveSplitKey(walletAddress));
   } catch {}
 }
 

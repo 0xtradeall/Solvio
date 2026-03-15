@@ -12,7 +12,7 @@ import { isSNSInput } from '@/lib/sns';
 import { saveReceipt } from '@/lib/storage';
 import { generateReceiptPDF } from '@/lib/pdf';
 import { generateSplitUrl } from '@/lib/transactions';
-import { saveSplit, updateSplitParticipantStatus, getSplits, SplitData } from '@/lib/storage';
+import { saveSplit, updateSplitParticipantStatus, getSplits, getActiveSplit, saveActiveSplit, clearActiveSplit, SplitData } from '@/lib/storage';
 import { getContacts } from '@/lib/storage';
 import { Currency, TxStatus, Receipt, Contact } from '@/types';
 
@@ -59,16 +59,20 @@ function SplitPageContent() {
   const [pdfGenerating, setPdfGenerating] = useState(false);
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [splitId, setSplitId] = useState<string>('');
+  const [createdAt, setCreatedAt] = useState<number>(Date.now());
   const [currentSplit, setCurrentSplit] = useState<SplitData | null>(null);
   const [showContactsModal, setShowContactsModal] = useState(false);
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [selectedContacts, setSelectedContacts] = useState<Set<string>>(new Set());
   const [contactsSearchQuery, setContactsSearchQuery] = useState('');
+  const [activeSplit, setActiveSplit] = useState<SplitData | null>(null);
+  const [showActiveSplitBanner, setShowActiveSplitBanner] = useState(false);
 
   useEffect(() => {
     // Generate unique split ID
     const newSplitId = `split_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
     setSplitId(newSplitId);
+    setCreatedAt(Date.now());
   }, []);
 
   useEffect(() => {
@@ -111,6 +115,21 @@ function SplitPageContent() {
       setContacts(getContacts(publicKey.toBase58()));
     } else {
       setContacts([]);
+    }
+  }, [publicKey]);
+
+  useEffect(() => {
+    if (publicKey) {
+      const active = getActiveSplit(publicKey.toBase58());
+      if (active) {
+        const allConfirmed = active.participants.every(p => p.status === 'confirmed');
+        if (allConfirmed) {
+          clearActiveSplit(publicKey.toBase58());
+          return;
+        }
+        setActiveSplit(active);
+        setShowActiveSplitBanner(true);
+      }
     }
   }, [publicKey]);
 
@@ -169,6 +188,18 @@ function SplitPageContent() {
 
         return changed ? next : prev;
       });
+
+      // Update active split state if it matches
+      setActiveSplit(existingSplit);
+      saveActiveSplit(publicKey.toBase58(), existingSplit);
+
+      // Check if all participants are confirmed and clear active split
+      const allConfirmed = existingSplit.participants.every(p => p.status === 'confirmed');
+      if (allConfirmed) {
+        clearActiveSplit(publicKey.toBase58());
+        setActiveSplit(null);
+        setShowActiveSplitBanner(false);
+      }
     }, 10000);
 
     return () => clearInterval(interval);
@@ -177,10 +208,44 @@ function SplitPageContent() {
   const total = parseFloat(totalAmount) || 0;
   const perPerson = equalSplit && participants.length > 0 ? total / participants.length : 0;
 
+  // Calculate custom total
+  const customTotal = participants.reduce((sum, p) => sum + (parseFloat(p.customAmount) || 0), 0);
+  const displayTotal = equalSplit ? total : customTotal;
+
   const getShare = useCallback((i: number): number => {
     if (equalSplit) return perPerson;
     return parseFloat(participants[i]?.customAmount || '0') || 0;
   }, [equalSplit, perPerson, participants]);
+
+  const customAmountsComplete = participants.length > 0 && participants.every(p => {
+    const amt = parseFloat(p.customAmount || '0');
+    return amt > 0;
+  });
+
+  useEffect(() => {
+    if (!publicKey || participants.length === 0) return;
+
+    const splitData: SplitData = {
+      id: splitId,
+      senderAddress: publicKey.toBase58(),
+      totalAmount: displayTotal,
+      currency,
+      description,
+      equalSplit,
+      participants: participants.map((p, i) => ({
+        id: `participant-${i}`,
+        walletAddress: p.walletAddress,
+        nickname: p.nickname || `Person ${i + 1}`,
+        amount: getShare(i),
+        status: p.status === 'idle' ? 'pending' : p.status,
+        txId: p.txId,
+      })),
+
+      createdAt,
+    };
+    saveActiveSplit(publicKey.toBase58(), splitData);
+    setActiveSplit(splitData);
+  }, [publicKey, splitId, description, displayTotal, currency, equalSplit, participants, createdAt, getShare]);
 
   const getParticipantName = (p: ParticipantState, i: number) => p.nickname || `Person ${i + 1}`;
   const shortenAddress = (addr: string) => (addr ? `${addr.slice(0, 4)}...${addr.slice(-4)}` : '');
@@ -200,6 +265,57 @@ function SplitPageContent() {
     setShowContactsModal(false);
     setSelectedContacts(new Set());
     setContactsSearchQuery('');
+  };
+
+  const continueActiveSplit = () => {
+    if (!activeSplit || !publicKey) return;
+
+    // Restore split data
+    setSplitId(activeSplit.id);
+    setCreatedAt(activeSplit.createdAt || Date.now());
+    setDescription(activeSplit.description);
+    setTotalAmount(activeSplit.totalAmount.toString());
+    setCurrency(activeSplit.currency);
+    setEqualSplit(activeSplit.equalSplit ?? true);
+
+    // Restore participants
+    const restoredParticipants = activeSplit.participants.map(p => ({
+      nickname: p.nickname,
+      addressInput: p.walletAddress,
+      walletAddress: p.walletAddress,
+      snsName: undefined,
+      customAmount: p.amount.toString(),
+      addressError: '',
+      amountError: '',
+      status: p.status,
+      txId: p.txId,
+      paidAt: p.status === 'confirmed' ? new Date().toISOString() : undefined,
+    }));
+    setParticipants(restoredParticipants);
+    setHasSentAll(true);
+    setCurrentSplit(activeSplit);
+    setShowActiveSplitBanner(false);
+  };
+
+  const startNewSplit = () => {
+    if (!publicKey) return;
+
+    // Clear active split
+    clearActiveSplit(publicKey.toBase58());
+    setActiveSplit(null);
+    setShowActiveSplitBanner(false);
+
+    // Reset form
+    setSplitId(`split_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`);
+    setDescription('');
+    setTotalAmount('');
+    setCurrency('SOL');
+    setEqualSplit(true);
+    setParticipants([]);
+    setHasSentAll(false);
+    setCurrentSplit(null);
+    setTotalError('');
+    setParticipantCountError('');
   };
 
   const toggleContactSelection = (contactId: string) => {
@@ -291,6 +407,7 @@ function SplitPageContent() {
           totalAmount: total,
           currency,
           description,
+          equalSplit,
           participants: next.map((p, i) => ({
             id: `participant-${i}-${Date.now()}`,
             walletAddress: p.walletAddress,
@@ -311,8 +428,9 @@ function SplitPageContent() {
   const validateAll = (): boolean => {
     let valid = true;
 
-    // Total amount validation
-    if (!validateAmount(totalAmount)) {
+    // Total amount validation (use computed total in custom mode)
+    const computedTotal = equalSplit ? parseFloat(totalAmount) || 0 : customTotal;
+    if (computedTotal <= 0) {
       setTotalError('Please enter the total amount to split');
       valid = false;
     } else {
@@ -325,15 +443,6 @@ function SplitPageContent() {
       valid = false;
     } else {
       setParticipantCountError('');
-    }
-
-    // Validate custom split sums
-    if (!equalSplit && validateAmount(totalAmount)) {
-      const sum = participants.reduce((acc, p) => acc + (parseFloat(p.customAmount) || 0), 0);
-      if (Math.abs(sum - total) > 0.000001) {
-        setTotalError(`Custom amounts (${sum.toFixed(4)}) must equal total (${total})`);
-        valid = false;
-      }
     }
 
     const updated = participants.map((p, i) => {
@@ -390,6 +499,7 @@ function SplitPageContent() {
       totalAmount: total,
       currency,
       description,
+      equalSplit,
       participants: results.map((p, i) => ({
         id: `participant-${i}-${Date.now()}`,
         walletAddress: p.walletAddress,
@@ -403,6 +513,10 @@ function SplitPageContent() {
     setParticipants(results);
     saveSplit(publicKey.toBase58(), splitData);
     setCurrentSplit(splitData);
+    
+    // Save as active split
+    saveActiveSplit(publicKey.toBase58(), splitData);
+    setActiveSplit(splitData);
   };
 
   const retryOne = (index: number) => {
@@ -482,7 +596,7 @@ function SplitPageContent() {
     window.open(whatsappUrl, '_blank');
   };
 
-  const formHasRequiredFields = validateAmount(totalAmount) && (currency === 'SOL' || currency === 'USDC') && participants.length >= 2;
+  const formHasRequiredFields = displayTotal > 0 && (currency === 'SOL' || currency === 'USDC') && participants.length >= 2;
   const participantsValid = participants.every((p, i) => {
     const share = getShare(i);
     return !!p.walletAddress && validateSolanaAddress(p.walletAddress) && share > 0 && !p.addressError && !p.amountError;
@@ -505,6 +619,33 @@ function SplitPageContent() {
         <h1 className="text-2xl font-bold text-gray-900">Split the Bill</h1>
         <p className="text-sm text-gray-500 mt-0.5">Pay multiple people simultaneously</p>
       </div>
+
+      {showActiveSplitBanner && activeSplit && (
+        <div className="bg-blue-50 border-2 border-blue-200 rounded-2xl p-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-blue-800 font-semibold">📋 You have an active split in progress</p>
+              <p className="text-sm text-blue-700 mt-1">
+                "{activeSplit.description}" • {activeSplit.participants.filter(p => p.status === 'confirmed').length}/{activeSplit.participants.length} paid
+              </p>
+            </div>
+            <div className="flex gap-2">
+              <button
+                onClick={continueActiveSplit}
+                className="bg-blue-500 hover:bg-blue-600 text-white font-semibold px-4 py-2 rounded-lg transition-colors"
+              >
+                Continue
+              </button>
+              <button
+                onClick={startNewSplit}
+                className="bg-gray-200 hover:bg-gray-300 text-gray-700 font-semibold px-4 py-2 rounded-lg transition-colors"
+              >
+                Start New Split
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {showStatusBar && (
         <div className="bg-white rounded-2xl p-4 border border-gray-100 shadow-sm">
@@ -553,15 +694,30 @@ function SplitPageContent() {
               )}
             </div>
             <div>
-              <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5 block">Total Amount</label>
+              <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5 block">
+                {equalSplit ? 'Total Amount' : 'Total Amount (calculated)'}
+              </label>
               <div className="flex gap-2">
-                <input type="number" value={totalAmount} onChange={e => {
-                    const value = e.target.value;
-                    setTotalAmount(value);
-                    setTotalError(!validateAmount(value) ? 'Please enter the total amount to split' : '');
+                <input 
+                  type="number" 
+                  value={equalSplit ? totalAmount : displayTotal.toFixed(4)} 
+                  onChange={e => {
+                    if (equalSplit) {
+                      const value = e.target.value;
+                      setTotalAmount(value);
+                      setTotalError(!validateAmount(value) ? 'Please enter the total amount to split' : '');
+                    }
                   }}
-                  placeholder="0.00" min="0" step="any" disabled={isSending}
-                  className={`flex-1 border-2 rounded-xl p-3 text-xl font-bold focus:outline-none transition-colors disabled:opacity-60 ${totalError ? 'border-red-400 bg-red-50' : 'border-gray-200 focus:border-primary-400'}`} />
+                  placeholder="0.00" 
+                  min="0" 
+                  step="any" 
+                  disabled={isSending || !equalSplit}
+                  className={`flex-1 border-2 rounded-xl p-3 text-xl font-bold focus:outline-none transition-colors disabled:opacity-60 ${
+                    totalError ? 'border-red-400 bg-red-50' : 
+                    !equalSplit && customAmountsComplete ? 'border-green-400 bg-green-50' : 
+                    'border-gray-200 focus:border-primary-400'
+                  }`} 
+                />
                 <div className="flex bg-gray-100 rounded-xl p-1 gap-1">
                   {(['SOL', 'USDC'] as Currency[]).map(c => (
                     <button key={c} onClick={() => setCurrency(c)} disabled={isSending}
@@ -570,6 +726,9 @@ function SplitPageContent() {
                 </div>
               </div>
               {totalError && <p className="text-red-500 text-xs mt-1 flex items-center gap-1"><AlertCircle size={11} />{totalError}</p>}
+              {!equalSplit && participants.length > 0 && !customAmountsComplete && (
+                <p className="text-xs text-gray-500 mt-1">Total is calculated from participant amounts; fill all amounts for an accurate total.</p>
+              )}
             </div>
             <div className="flex items-center gap-3">
               <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Split type</span>

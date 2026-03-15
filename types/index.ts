@@ -52,6 +52,7 @@ export interface SplitData {
   currency: 'SOL' | 'USDC';
   createdAt: number;
   senderAddress: string;
+  equalSplit?: boolean;
   participants: {
     id: string;
     nickname: string;
