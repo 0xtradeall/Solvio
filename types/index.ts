@@ -47,12 +47,19 @@ export interface SplitBillData {
 
 export interface SplitData {
   id: string;
-  senderAddress: string;
-  totalAmount: number;
-  currency: string;
   description: string;
-  participants: SplitParticipant[];
-  createdAt: string;
+  totalAmount: number;
+  currency: 'SOL' | 'USDC';
+  createdAt: number;
+  createdBy: string;
+  participants: {
+    id: string;
+    nickname: string;
+    walletAddress: string;
+    amount: number;
+    status: 'pending' | 'confirmed' | 'failed';
+    txId?: string;
+  }[];
 }
 
 export interface SplitParticipant {

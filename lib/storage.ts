@@ -140,13 +140,14 @@ export function updateSplitParticipantStatus(
     const split = splits.find(s => s.id === splitId);
     if (!split) return;
 
-    const participant = split.participants.find(p => p.address === participantAddress);
+    const participant = split.participants.find(p => p.walletAddress === participantAddress);
     if (!participant) return;
 
     participant.status = status;
     if (txId) participant.txId = txId;
-    if (status === 'confirmed') participant.paidAt = new Date().toISOString();
 
     saveSplit(walletAddress, split);
   } catch {}
 }
+
+export { SplitData };
