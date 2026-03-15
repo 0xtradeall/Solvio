@@ -24,6 +24,7 @@ interface ParticipantState {
   snsName?: string;
   customAmount: string;
   addressError: string;
+  amountError: string;
   status: TxStatus | 'idle';
   txId?: string;
   txError?: string;
@@ -36,6 +37,7 @@ const makeParticipant = (nickname = '', walletAddress = ''): ParticipantState =>
   snsName: undefined,
   customAmount: '',
   addressError: '',
+  amountError: '',
   status: 'idle',
 });
 
@@ -53,8 +55,10 @@ function SplitPageContent() {
   const [isSending, setIsSending] = useState(false);
   const [summary, setSummary] = useState<{ confirmed: number; failed: number; total: number } | null>(null);
   const [totalError, setTotalError] = useState('');
+  const [participantCountError, setParticipantCountError] = useState('');
   const [pdfGenerating, setPdfGenerating] = useState(false);
   const [showSummaryModal, setShowSummaryModal] = useState(false);
+  const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [splitId, setSplitId] = useState<string>('');
   const [currentSplit, setCurrentSplit] = useState<SplitData | null>(null);
   const [showContactsModal, setShowContactsModal] = useState(false);
@@ -108,6 +112,33 @@ function SplitPageContent() {
     }
   }, [publicKey]);
 
+  useEffect(() => {
+    if (participants.length < 2) {
+      setParticipantCountError('Add at least 2 people to split the bill');
+    } else {
+      setParticipantCountError('');
+    }
+  }, [participants.length]);
+
+  useEffect(() => {
+    if (!equalSplit) return;
+
+    const total = parseFloat(totalAmount) || 0;
+    const share = total / (participants.length || 1);
+    setParticipants(prev => {
+      let updated = false;
+      const next = prev.map(p => {
+        const amountError = share <= 0 ? 'Amount cannot be zero — check your split calculation' : '';
+        if (p.amountError !== amountError) {
+          updated = true;
+          return { ...p, amountError };
+        }
+        return p;
+      });
+      return updated ? next : prev;
+    });
+  }, [equalSplit, totalAmount, participants.length]);
+
   const total = parseFloat(totalAmount) || 0;
   const perPerson = equalSplit && participants.length > 0 ? total / participants.length : 0;
 
@@ -115,6 +146,9 @@ function SplitPageContent() {
     if (equalSplit) return perPerson;
     return parseFloat(participants[i]?.customAmount || '0') || 0;
   }, [equalSplit, perPerson, participants]);
+
+  const getParticipantName = (p: ParticipantState, i: number) => p.nickname || `Person ${i + 1}`;
+  const shortenAddress = (addr: string) => (addr ? `${addr.slice(0, 4)}...${addr.slice(-4)}` : '');
 
   const addParticipant = () => {
     if (participants.length >= 10) return;
@@ -175,6 +209,12 @@ function SplitPageContent() {
     setParticipants(prev => {
       const next = [...prev];
       (next[index] as any)[field] = value;
+
+      if (field === 'customAmount') {
+        const share = parseFloat(value) || 0;
+        next[index].amountError = share <= 0 ? 'Amount cannot be zero — check your split calculation' : '';
+      }
+
       return next;
     });
   };
@@ -183,10 +223,17 @@ function SplitPageContent() {
     setParticipants(prev => {
       const next = [...prev];
       const isSns = isSNSInput(raw);
+      const name = getParticipantName(next[index], index);
       let addressError = '';
-      if (raw && !isSns && !validateSolanaAddress(raw)) {
+
+      if (!raw) {
+        addressError = `Please enter wallet address for ${name}`;
+      } else if (isSns && !resolved) {
+        addressError = 'Waiting for .sol name to resolve…';
+      } else if (!isSns && !validateSolanaAddress(raw)) {
         addressError = 'Invalid Solana address';
       }
+
       next[index] = {
         ...next[index],
         addressInput: raw,
@@ -222,37 +269,69 @@ function SplitPageContent() {
 
   const validateAll = (): boolean => {
     let valid = true;
+
+    // Total amount validation
     if (!validateAmount(totalAmount)) {
-      setTotalError('Enter a valid total amount greater than 0');
+      setTotalError('Please enter the total amount to split');
       valid = false;
     } else {
       setTotalError('');
     }
-    const updated = participants.map(p => {
-      let addrErr = '';
-      if (!p.addressInput) {
-        addrErr = 'Wallet address is required';
-      } else if (isSNSInput(p.addressInput) && !p.walletAddress) {
-        addrErr = 'Waiting for .sol name to resolve…';
-      } else if (!validateSolanaAddress(p.walletAddress)) {
-        addrErr = 'Invalid Solana address';
-      }
-      if (addrErr) valid = false;
-      return { ...p, addressError: addrErr };
-    });
-    setParticipants(updated);
-    if (!equalSplit) {
+
+    // Participant count validation
+    if (participants.length < 2) {
+      setParticipantCountError('Add at least 2 people to split the bill');
+      valid = false;
+    } else {
+      setParticipantCountError('');
+    }
+
+    // Validate custom split sums
+    if (!equalSplit && validateAmount(totalAmount)) {
       const sum = participants.reduce((acc, p) => acc + (parseFloat(p.customAmount) || 0), 0);
       if (Math.abs(sum - total) > 0.000001) {
         setTotalError(`Custom amounts (${sum.toFixed(4)}) must equal total (${total})`);
         valid = false;
       }
     }
+
+    const updated = participants.map((p, i) => {
+      const name = getParticipantName(p, i);
+      let addressError = '';
+      let amountError = '';
+      const share = getShare(i);
+
+      if (!p.addressInput) {
+        addressError = `Please enter wallet address for ${name}`;
+      } else if (isSNSInput(p.addressInput) && !p.walletAddress) {
+        addressError = 'Waiting for .sol name to resolve…';
+      } else if (!validateSolanaAddress(p.walletAddress)) {
+        addressError = 'Invalid Solana address';
+      }
+
+      if (share <= 0) {
+        amountError = 'Amount cannot be zero — check your split calculation';
+      }
+
+      if (addressError || amountError) valid = false;
+
+      return { ...p, addressError, amountError };
+    });
+
+    setParticipants(updated);
     return valid;
   };
 
+  const handleSendAllClick = () => {
+    const valid = validateAll();
+    if (!valid) return;
+    setShowConfirmModal(true);
+  };
+
   const sendAll = async () => {
-    if (!publicKey || !validateAll()) return;
+    if (!publicKey) return;
+    setShowConfirmModal(false);
+    if (!validateAll()) return;
     setIsSending(true);
     setSummary(null);
     setShowSummaryModal(false);
@@ -404,7 +483,12 @@ function SplitPageContent() {
     window.open(whatsappUrl, '_blank');
   };
 
-  const hasSendable = participants.length > 0 && !isSending && participants.some(p => p.status !== 'confirmed' && !p.addressError && p.walletAddress);
+  const formHasRequiredFields = validateAmount(totalAmount) && (currency === 'SOL' || currency === 'USDC') && participants.length >= 2;
+  const participantsValid = participants.every((p, i) => {
+    const share = getShare(i);
+    return !!p.walletAddress && validateSolanaAddress(p.walletAddress) && share > 0 && !p.addressError && !p.amountError;
+  });
+  const isFormValid = formHasRequiredFields && participantsValid && !totalError && !participantCountError;
   const anyDone = participants.some(p => p.status === 'confirmed' || p.status === 'failed');
 
   return (
@@ -451,11 +535,18 @@ function SplitPageContent() {
               <input type="text" value={description} onChange={e => setDescription(e.target.value)}
                 placeholder="e.g., Dinner at Nobu, Team lunch..." disabled={isSending}
                 className="w-full border-2 border-gray-200 focus:border-primary-400 rounded-xl p-3 focus:outline-none transition-colors disabled:opacity-60" />
+              {!description && (
+                <p className="text-gray-500 text-xs mt-1">Description is optional but helps participants understand the payment.</p>
+              )}
             </div>
             <div>
               <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5 block">Total Amount</label>
               <div className="flex gap-2">
-                <input type="number" value={totalAmount} onChange={e => { setTotalAmount(e.target.value); setTotalError(''); }}
+                <input type="number" value={totalAmount} onChange={e => {
+                    const value = e.target.value;
+                    setTotalAmount(value);
+                    setTotalError(!validateAmount(value) ? 'Please enter the total amount to split' : '');
+                  }}
                   placeholder="0.00" min="0" step="any" disabled={isSending}
                   className={`flex-1 border-2 rounded-xl p-3 text-xl font-bold focus:outline-none transition-colors disabled:opacity-60 ${totalError ? 'border-red-400 bg-red-50' : 'border-gray-200 focus:border-primary-400'}`} />
                 <div className="flex bg-gray-100 rounded-xl p-1 gap-1">
@@ -483,7 +574,12 @@ function SplitPageContent() {
 
           <div className="space-y-3">
             <div className="flex items-center justify-between">
-              <h2 className="font-bold text-gray-900">Participants <span className="text-gray-400 font-normal text-sm">({participants.length}/10)</span></h2>
+              <div>
+                <h2 className="font-bold text-gray-900">Participants <span className="text-gray-400 font-normal text-sm">({participants.length}/10)</span></h2>
+                {participantCountError && (
+                  <p className="text-red-500 text-xs mt-1 flex items-center gap-1"><AlertCircle size={11} />{participantCountError}</p>
+                )}
+              </div>
               <div className="flex items-center gap-2">
                 <button onClick={openContactsModal} disabled={participants.length >= 10 || isSending}
                   className="flex items-center gap-1 text-secondary-600 hover:text-secondary-700 font-semibold text-sm disabled:opacity-40 transition-colors">
@@ -534,25 +630,31 @@ function SplitPageContent() {
                     <p className="text-red-500 text-xs mt-1 flex items-center gap-1"><AlertCircle size={11} /> {p.addressError}</p>
                   )}
                 </div>
-                {!equalSplit && (
-                  <input type="number" value={p.customAmount} onChange={e => updateParticipant(i, 'customAmount', e.target.value)}
-                    placeholder={`Amount in ${currency}`} min="0" step="any" disabled={isSending || p.status === 'confirmed'}
-                    className="w-full border-2 border-gray-200 focus:border-primary-400 rounded-xl p-2.5 text-sm focus:outline-none transition-colors disabled:opacity-60" />
-                )}
-                {equalSplit && total > 0 && (
-                  <p className="text-xs text-gray-400">Share: <span className="font-bold text-primary-600">{perPerson.toFixed(6)} {currency}</span></p>
-                )}
-                {p.walletAddress && validateSolanaAddress(p.walletAddress) && (
+                {!equalSplit ? (
+                  <>
+                    <input type="number" value={p.customAmount} onChange={e => updateParticipant(i, 'customAmount', e.target.value)}
+                      placeholder={`Amount in ${currency}`} min="0" step="any" disabled={isSending || p.status === 'confirmed'}
+                      className={`w-full border-2 rounded-xl p-2.5 text-sm focus:outline-none transition-colors disabled:opacity-60 ${p.amountError ? 'border-red-400 bg-red-50' : 'border-gray-200 focus:border-primary-400'}`} />
+                    {p.amountError && (
+                      <p className="text-red-500 text-xs mt-1 flex items-center gap-1"><AlertCircle size={11} />{p.amountError}</p>
+                    )}
+                  </>
+                ) : total > 0 ? (
+                  <p className={`text-xs ${p.amountError ? 'text-red-500' : 'text-gray-400'}`}>Share: <span className="font-bold text-primary-600">{perPerson.toFixed(6)} {currency}</span></p>
+                ) : null}
+                {isFormValid && p.walletAddress && validateSolanaAddress(p.walletAddress) && (
                   <div className="flex gap-2 pt-2">
                     <button
                       onClick={() => copyLink(generateParticipantLink(p, i))}
                       className="flex items-center gap-1 bg-gray-100 hover:bg-gray-200 text-gray-700 text-xs font-semibold px-3 py-1.5 rounded-lg transition-colors"
+                      title={!isFormValid ? 'Fill in all required fields to continue' : undefined}
                     >
                       <Copy size={12} /> Copy Link
                     </button>
                     <button
                       onClick={() => shareViaWhatsApp(generateParticipantLink(p, i), p)}
                       className="flex items-center gap-1 bg-green-100 hover:bg-green-200 text-green-700 text-xs font-semibold px-3 py-1.5 rounded-lg transition-colors"
+                      title={!isFormValid ? 'Fill in all required fields to continue' : undefined}
                     >
                       <Share2 size={12} /> WhatsApp
                     </button>
@@ -584,13 +686,66 @@ function SplitPageContent() {
             </button>
           )}
 
-          <button onClick={sendAll} disabled={!hasSendable || !totalAmount || parseFloat(totalAmount) <= 0}
-            className="w-full bg-primary-500 hover:bg-primary-600 active:bg-primary-700 active:scale-[0.98] disabled:opacity-40 disabled:cursor-not-allowed text-white font-bold py-4 rounded-2xl transition-all flex items-center justify-center gap-2 text-base shadow-sm shadow-primary-200">
-            {isSending
-              ? <><Loader2 size={18} className="animate-spin" /> Sending Payments…</>
-              : `Send All ${participants.length} Payment${participants.length !== 1 ? 's' : ''}`
-            }
-          </button>
+          <div title={!isFormValid ? 'Fill in all required fields to continue' : undefined}>
+            <button onClick={() => handleSendAllClick()}
+              disabled={!isFormValid || isSending}
+              className="w-full bg-primary-500 hover:bg-primary-600 active:bg-primary-700 active:scale-[0.98] disabled:opacity-40 disabled:cursor-not-allowed text-white font-bold py-4 rounded-2xl transition-all flex items-center justify-center gap-2 text-base shadow-sm shadow-primary-200">
+              {isSending
+                ? <><Loader2 size={18} className="animate-spin" /> Sending Payments…</>
+                : `Send All ${participants.length} Payment${participants.length !== 1 ? 's' : ''}`
+              }
+            </button>
+          </div>
+
+          {showConfirmModal && (
+            <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+              <div className="bg-white rounded-3xl shadow-2xl max-w-lg w-full p-6 space-y-4">
+                <div className="flex items-start justify-between">
+                  <div>
+                    <h3 className="text-xl font-bold text-gray-900">Confirm split</h3>
+                    <p className="text-sm text-gray-600 mt-1">
+                      Ready to split <span className="font-semibold">{total.toFixed(4)} {currency}</span> between <span className="font-semibold">{participants.length}</span> people?
+                    </p>
+                    {equalSplit ? (
+                      <p className="text-sm text-gray-600 mt-1">
+                        Each person pays: <span className="font-semibold">{perPerson.toFixed(4)} {currency}</span>
+                      </p>
+                    ) : (
+                      <p className="text-sm text-gray-600 mt-1">
+                        Custom amounts will be used for each person.
+                      </p>
+                    )}
+                  </div>
+                  <button onClick={() => setShowConfirmModal(false)} className="text-gray-400 hover:text-gray-600 text-lg">×</button>
+                </div>
+
+                <div className="max-h-64 overflow-y-auto rounded-xl border border-gray-100 bg-gray-50 p-4">
+                  {participants.map((p, i) => (
+                    <div key={i} className="flex items-start justify-between gap-3 py-2 border-b last:border-b-0">
+                      <div className="min-w-0">
+                        <p className="font-semibold text-gray-900 truncate">{getParticipantName(p, i)}</p>
+                        <p className="text-xs text-gray-500">{shortenAddress(p.walletAddress)}</p>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-sm font-semibold text-gray-900">{getShare(i).toFixed(4)} {currency}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="flex gap-3">
+                  <button onClick={() => setShowConfirmModal(false)}
+                    className="flex-1 bg-gray-200 hover:bg-gray-300 text-gray-700 font-semibold py-3 rounded-xl transition-colors">
+                    Cancel
+                  </button>
+                  <button onClick={() => sendAll()}
+                    className="flex-1 bg-primary-500 hover:bg-primary-600 text-white font-semibold py-3 rounded-xl transition-colors">
+                    Confirm & Send All
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Contacts Modal */}
           {showContactsModal && (
