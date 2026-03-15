@@ -40,6 +40,26 @@ export function generatePaymentUrl(
   return `${baseUrl}/pay?${new URLSearchParams(params).toString()}`;
 }
 
+export function generateSplitUrl(
+  baseUrl: string,
+  splitId: string,
+  participantAddress: string,
+  amount: number,
+  currency: Currency,
+  description: string,
+  senderAddress: string
+): string {
+  const params: Record<string, string> = {
+    splitId,
+    participant: participantAddress,
+    amount: amount.toString(),
+    currency,
+    description,
+    sender: senderAddress,
+  };
+  return `${baseUrl}/split-pay?${new URLSearchParams(params).toString()}`;
+}
+
 export async function sendPayment(
   connection: Connection,
   wallet: WalletContextState,

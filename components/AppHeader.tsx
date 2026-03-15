@@ -63,14 +63,14 @@ export default function AppHeader() {
         {/* Home link */}
         <Link
           href="/"
-          className="flex items-center gap-1.5 text-gray-400 hover:text-primary-600 transition-colors text-sm font-medium"
+          className="flex items-center gap-1.5 text-gray-400 hover:text-primary-600 transition-colors text-sm font-medium cursor-pointer"
         >
           <Home size={15} />
           <span className="hidden sm:inline">Home</span>
         </Link>
 
         {/* Centred logo */}
-        <Link href="/" className="absolute left-1/2 -translate-x-1/2">
+        <Link href="/" className="absolute left-1/2 -translate-x-1/2 cursor-pointer">
           <SolvioLogo size={26} wordmarkColor="text-gray-900" />
         </Link>
 

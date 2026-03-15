@@ -4,7 +4,7 @@ import { useState, useCallback, useEffect } from 'react';
 import { useWallet, useConnection } from '@solana/wallet-adapter-react';
 import { useSearchParams } from 'next/navigation';
 import { Suspense } from 'react';
-import { Plus, Trash2, AlertCircle, CheckCircle, XCircle, Loader2, RefreshCw, Users } from 'lucide-react';
+import { Plus, Trash2, AlertCircle, CheckCircle, XCircle, Loader2, RefreshCw, Users, Lock, Copy, Share2 } from 'lucide-react';
 import WalletConnectButton from '@/components/WalletConnectButton';
 import SnsAddressInput from '@/components/SnsAddressInput';
 import { validateSolanaAddress, validateAmount } from '@/lib/validators';
@@ -12,6 +12,8 @@ import { isSNSInput } from '@/lib/sns';
 import { sendPayment } from '@/lib/transactions';
 import { saveReceipt } from '@/lib/storage';
 import { generateReceiptPDF } from '@/lib/pdf';
+import { generateSplitUrl } from '@/lib/transactions';
+import { saveSplit, updateSplitParticipantStatus, getSplits, SplitData } from '@/lib/storage';
 import { Currency, TxStatus, Receipt } from '@/types';
 
 interface ParticipantState {
@@ -52,6 +54,38 @@ function SplitPageContent() {
   const [totalError, setTotalError] = useState('');
   const [pdfGenerating, setPdfGenerating] = useState(false);
   const [showSummaryModal, setShowSummaryModal] = useState(false);
+  const [splitId, setSplitId] = useState<string>('');
+  const [currentSplit, setCurrentSplit] = useState<SplitData | null>(null);
+
+  useEffect(() => {
+    // Generate unique split ID
+    const newSplitId = `split_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    setSplitId(newSplitId);
+  }, []);
+
+  useEffect(() => {
+    if (publicKey && splitId) {
+      // Load existing split data if it exists
+      const splits = getSplits(publicKey.toBase58());
+      const existingSplit = splits.find(s => s.id === splitId);
+      if (existingSplit) {
+        setCurrentSplit(existingSplit);
+        // Update participants status from split data
+        const updatedParticipants = participants.map((p, i) => {
+          const splitParticipant = existingSplit.participants.find(sp => sp.address === p.address);
+          if (splitParticipant) {
+            return {
+              ...p,
+              status: splitParticipant.status === 'confirmed' ? 'confirmed' : p.status,
+              txId: splitParticipant.txId || p.txId,
+            };
+          }
+          return p;
+        });
+        setParticipants(updatedParticipants);
+      }
+    }
+  }, [publicKey, splitId, participants.length]);
 
   useEffect(() => {
     const add = searchParams.get('add');
@@ -101,6 +135,27 @@ function SplitPageContent() {
         snsName: snsName,
         addressError,
       };
+
+      // Save split data when addresses are updated
+      if (publicKey && splitId && description && total > 0) {
+        const splitData: SplitData = {
+          id: splitId,
+          senderAddress: publicKey.toBase58(),
+          totalAmount: total,
+          currency,
+          description,
+          participants: next.map((p, i) => ({
+            address: p.address,
+            nickname: p.nickname || `Person ${i + 1}`,
+            amount: getShare(i),
+            status: 'pending',
+          })),
+          createdAt: new Date().toISOString(),
+        };
+        saveSplit(publicKey.toBase58(), splitData);
+        setCurrentSplit(splitData);
+      }
+
       return next;
     });
   };
@@ -144,6 +199,23 @@ function SplitPageContent() {
 
     const results: ParticipantState[] = [...participants];
 
+    // Save split data
+    const splitData: SplitData = {
+      id: splitId,
+      senderAddress: publicKey.toBase58(),
+      totalAmount: total,
+      currency,
+      description,
+      participants: participants.map((p, i) => ({
+        address: p.address,
+        nickname: p.nickname || `Person ${i + 1}`,
+        amount: getShare(i),
+        status: 'pending',
+      })),
+      createdAt: new Date().toISOString(),
+    };
+    saveSplit(publicKey.toBase58(), splitData);
+
     await Promise.allSettled(
       participants.map(async (p, i) => {
         if (p.status === 'confirmed') return;
@@ -152,6 +224,10 @@ function SplitPageContent() {
         await sendPayment(connection, wallet, p.address, getShare(i), currency, (s) => {
           results[i] = { ...results[i], status: s.status, txId: s.signature, txError: s.error };
           setParticipants([...results]);
+          // Update split participant status
+          if (s.status === 'confirmed' && s.signature) {
+            updateSplitParticipantStatus(publicKey.toBase58(), splitId, p.address, 'confirmed', s.signature);
+          }
         });
       })
     );
@@ -232,6 +308,41 @@ function SplitPageContent() {
     return 'border-gray-200 bg-white';
   };
 
+  const generateParticipantLink = (participant: ParticipantState, index: number): string => {
+    if (!publicKey) return '';
+    const baseUrl = typeof window !== 'undefined' ? window.location.origin : '';
+    return generateSplitUrl(
+      baseUrl,
+      splitId,
+      participant.address,
+      getShare(index),
+      currency,
+      description,
+      publicKey.toBase58()
+    );
+  };
+
+  const copyLink = async (link: string) => {
+    try {
+      await navigator.clipboard.writeText(link);
+      // Could add a toast notification here
+    } catch {
+      // Fallback for older browsers
+      const ta = document.createElement('textarea');
+      ta.value = link;
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand('copy');
+      document.body.removeChild(ta);
+    }
+  };
+
+  const shareViaWhatsApp = (link: string, participant: ParticipantState) => {
+    const message = `Hey ${participant.nickname || 'there'}! Please pay your share of ${getShare(participants.indexOf(participant))} ${currency} for: ${description}\n\n${link}`;
+    const whatsappUrl = `https://wa.me/?text=${encodeURIComponent(message)}`;
+    window.open(whatsappUrl, '_blank');
+  };
+
   const hasSendable = participants.length > 0 && !isSending && participants.some(p => p.status !== 'confirmed' && !p.addressError && p.address);
   const anyDone = participants.some(p => p.status === 'confirmed' || p.status === 'failed');
 
@@ -263,6 +374,13 @@ function SplitPageContent() {
                 </p>
               </div>
               <button onClick={() => setShowSummaryModal(false)} className="text-gray-400 hover:text-gray-600 text-lg">×</button>
+            </div>
+          )}
+
+          {currentSplit && currentSplit.participants.every(p => p.status === 'confirmed') && (
+            <div className="bg-green-50 border-2 border-green-200 rounded-2xl p-4 text-center">
+              <p className="text-green-800 font-extrabold text-lg">🎉 Split Complete!</p>
+              <p className="text-sm text-green-700 mt-1">All participants have paid their share</p>
             </div>
           )}
 
@@ -317,6 +435,9 @@ function SplitPageContent() {
                   <div className="flex items-center gap-2">
                     <div className="w-7 h-7 bg-primary-100 rounded-full flex items-center justify-center text-primary-700 font-bold text-xs flex-shrink-0">{i + 1}</div>
                     {statusBadge(p.status)}
+                    {p.address && validateSolanaAddress(p.address) && (
+                      <Lock size={14} className="text-green-600" />
+                    )}
                   </div>
                   <div className="flex items-center gap-2">
                     {p.status === 'failed' && !isSending && (
@@ -353,6 +474,22 @@ function SplitPageContent() {
                 )}
                 {equalSplit && total > 0 && (
                   <p className="text-xs text-gray-400">Share: <span className="font-bold text-primary-600">{perPerson.toFixed(6)} {currency}</span></p>
+                )}
+                {p.address && validateSolanaAddress(p.address) && (
+                  <div className="flex gap-2 pt-2">
+                    <button
+                      onClick={() => copyLink(generateParticipantLink(p, i))}
+                      className="flex items-center gap-1 bg-gray-100 hover:bg-gray-200 text-gray-700 text-xs font-semibold px-3 py-1.5 rounded-lg transition-colors"
+                    >
+                      <Copy size={12} /> Copy Link
+                    </button>
+                    <button
+                      onClick={() => shareViaWhatsApp(generateParticipantLink(p, i), p)}
+                      className="flex items-center gap-1 bg-green-100 hover:bg-green-200 text-green-700 text-xs font-semibold px-3 py-1.5 rounded-lg transition-colors"
+                    >
+                      <Share2 size={12} /> WhatsApp
+                    </button>
+                  </div>
                 )}
                 {p.txId && (
                   <a href={`https://solscan.io/tx/${p.txId}?cluster=devnet`} target="_blank" rel="noopener noreferrer"

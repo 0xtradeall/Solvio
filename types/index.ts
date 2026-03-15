@@ -45,6 +45,25 @@ export interface SplitBillData {
   equalSplit: boolean;
 }
 
+export interface SplitData {
+  id: string;
+  senderAddress: string;
+  totalAmount: number;
+  currency: string;
+  description: string;
+  participants: SplitParticipant[];
+  createdAt: string;
+}
+
+export interface SplitParticipant {
+  address: string;
+  nickname: string;
+  amount: number;
+  status: 'pending' | 'confirmed';
+  txId?: string;
+  paidAt?: string;
+}
+
 export interface TransactionStatus {
   status: TxStatus;
   signature?: string;
