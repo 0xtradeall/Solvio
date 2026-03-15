@@ -150,4 +150,4 @@ export function updateSplitParticipantStatus(
   } catch {}
 }
 
-export { SplitData };
+export type { SplitData };
