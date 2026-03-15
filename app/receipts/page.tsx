@@ -277,153 +277,150 @@ export default function ReceiptsPage() {
     : 'bg-primary-100 text-primary-700';
 
   return (
-    <>
+    <div className="p-4 space-y-5 pb-20">
       {emailReceipt && <EmailModal receipt={emailReceipt} onClose={() => setEmailReceipt(null)} />}
 
-      <div className="p-4 space-y-5 pb-20">
-        <div className="pt-4">
-          <h1 className="text-2xl font-bold text-gray-900">Receipts</h1>
-          <p className="text-sm text-gray-500 mt-0.5">Transaction history stored on this device</p>
-        </div>
+      <div className="pt-4">
+        <h1 className="text-2xl font-bold text-gray-900">Receipts</h1>
+        <p className="text-sm text-gray-500 mt-0.5">Transaction history stored on this device</p>
+      </div>
 
-        {!connected ? (
-          <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100 text-center space-y-4">
-            <div className="w-16 h-16 bg-primary-50 rounded-full flex items-center justify-center mx-auto">
-              <FileText className="text-primary-400" size={28} />
-            </div>
-            <p className="text-gray-600 font-medium">Connect your wallet to view receipts</p>
-            <p className="text-sm text-gray-400">Receipts are stored locally, tied to your wallet address.</p>
-            <WalletConnectButton />
+      {!connected ? (
+        <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100 text-center space-y-4">
+          <div className="w-16 h-16 bg-primary-50 rounded-full flex items-center justify-center mx-auto">
+            <FileText className="text-primary-400" size={28} />
           </div>
-        ) : (
-          <>
-            {/* Active Splits Section */}
-            {activeSplits.length > 0 && (
-              <div className="space-y-4">
-                <h2 className="text-xl font-bold text-gray-900">Active Splits</h2>
-                {activeSplits.map(split => {
-                  const confirmedCount = split.participants.filter(p => p.status === 'confirmed').length;
-                  const pendingCount = split.participants.filter(p => p.status === 'pending').length;
-                  const failedCount = split.participants.filter(p => p.status === 'failed').length;
-                  const totalCount = split.participants.length;
-                  const progressPercent = totalCount ? Math.round((confirmedCount / totalCount) * 100) : 0;
-                  const allPaid = confirmedCount === totalCount;
+          <p className="text-gray-600 font-medium">Connect your wallet to view receipts</p>
+          <p className="text-sm text-gray-400">Receipts are stored locally, tied to your wallet address.</p>
+          <WalletConnectButton />
+        </div>
+      ) : (
+        <div className="space-y-6">
+          {activeSplits.length > 0 && (
+            <div className="space-y-4">
+              <h2 className="text-xl font-bold text-gray-900">Active Splits</h2>
+              {activeSplits.map(split => {
+                const confirmedCount = split.participants.filter(p => p.status === 'confirmed').length;
+                const pendingCount = split.participants.filter(p => p.status === 'pending').length;
+                const failedCount = split.participants.filter(p => p.status === 'failed').length;
+                const totalCount = split.participants.length;
+                const progressPercent = totalCount ? Math.round((confirmedCount / totalCount) * 100) : 0;
+                const allPaid = confirmedCount === totalCount;
 
-                  return (
-                    <div key={split.id} className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
-                      <div className="p-4 space-y-4">
-                        <div className="flex items-start justify-between gap-2">
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-2 flex-wrap mb-2">
-                              <span className="text-lg font-bold text-gray-900">{split.totalAmount} {split.currency}</span>
-                              <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-blue-100 text-blue-700">
-                                Split
+                return (
+                  <div key={split.id} className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+                    <div className="p-4 space-y-4">
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 flex-wrap mb-2">
+                            <span className="text-lg font-bold text-gray-900">{split.totalAmount} {split.currency}</span>
+                            <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-blue-100 text-blue-700">
+                              Split
+                            </span>
+                          </div>
+                          <p className="text-sm text-gray-600 mb-2">"{split.description}"</p>
+                          <p className="text-xs text-gray-400">
+                            Created {format(new Date(split.createdAt), "MMM d, yyyy '·' h:mm a")}
+                          </p>
+                          <div className="mt-3">
+                            <div className="flex items-center justify-between text-sm mb-2">
+                              <span className="font-semibold text-gray-700">
+                                Progress: {confirmedCount}/{totalCount} paid • {pendingCount} pending{failedCount ? ` • ${failedCount} failed` : ''}
                               </span>
+                              <span className="text-gray-500">{progressPercent}%</span>
                             </div>
-                            <p className="text-sm text-gray-600 mb-2">"{split.description}"</p>
-                            <p className="text-xs text-gray-400">
-                              Created {format(new Date(split.createdAt), "MMM d, yyyy '·' h:mm a")}
-                            </p>
-                            <div className="mt-3">
-                              <div className="flex items-center justify-between text-sm mb-2">
-                                <span className="font-semibold text-gray-700">
-                                  Progress: {confirmedCount}/{totalCount} paid • {pendingCount} pending{failedCount ? ` • ${failedCount} failed` : ''}
-                                </span>
-                                <span className="text-gray-500">{progressPercent}%</span>
-                              </div>
-                              <div className="h-2 w-full bg-gray-200 rounded-full overflow-hidden">
-                                <div className={`${allPaid ? 'bg-green-500' : 'bg-primary-500'} h-full transition-all duration-300`} style={{ width: `${progressPercent}%` }} />
-                              </div>
+                            <div className="h-2 w-full bg-gray-200 rounded-full overflow-hidden">
+                              <div className={`${allPaid ? 'bg-green-500' : 'bg-primary-500'} h-full transition-all duration-300`} style={{ width: `${progressPercent}%` }} />
                             </div>
                           </div>
                         </div>
+                      </div>
 
-                        <div className="space-y-2">
-                          {split.participants.map(participant => (
-                            <div key={participant.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-xl">
-                              <div className="flex items-center gap-3">
-                                <div className={`w-3 h-3 rounded-full ${
-                                  participant.status === 'confirmed' ? 'bg-green-500' :
-                                  participant.status === 'pending' ? 'bg-yellow-500' :
-                                  'bg-red-500'
-                                }`} />
-                                <div>
-                                  <p className="font-semibold text-gray-900">{participant.nickname}</p>
-                                  <p className="text-xs text-gray-500">{participant.amount} {split.currency}</p>
-                                </div>
-                              </div>
-                              <div className="flex items-center gap-2">
-                                {participant.status === 'confirmed' && participant.txId && (
-                                  <a
-                                    href={`https://solscan.io/tx/${participant.txId}?cluster=devnet`}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className="text-xs text-secondary-600 underline"
-                                  >
-                                    <ExternalLink size={12} />
-                                  </a>
-                                )}
-                                {participant.status === 'pending' && (
-                                  <>
-                                    <button
-                                      onClick={() => copyParticipantLink(generateParticipantLink(split, participant.walletAddress))}
-                                      className="text-xs bg-gray-200 hover:bg-gray-300 text-gray-700 px-2 py-1 rounded transition-colors"
-                                    >
-                                      Copy Link
-                                    </button>
-                                    <button
-                                      onClick={() => shareParticipantViaWhatsApp(split, generateParticipantLink(split, participant.walletAddress), participant)}
-                                      className="text-xs bg-green-100 hover:bg-green-200 text-green-700 px-2 py-1 rounded transition-colors"
-                                    >
-                                      WhatsApp
-                                    </button>
-                                  </>
-                                )}
-                                {participant.status === 'failed' && (
-                                  <button
-                                    onClick={() => copyParticipantLink(generateParticipantLink(split, participant.walletAddress))}
-                                    className="text-xs bg-red-100 hover:bg-red-200 text-red-700 px-2 py-1 rounded transition-colors"
-                                  >
-                                    Retry
-                                  </button>
-                                )}
+                      <div className="space-y-2">
+                        {split.participants.map(participant => (
+                          <div key={participant.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-xl">
+                            <div className="flex items-center gap-3">
+                              <div className={`w-3 h-3 rounded-full ${
+                                participant.status === 'confirmed' ? 'bg-green-500' :
+                                participant.status === 'pending' ? 'bg-yellow-500' :
+                                'bg-red-500'
+                              }`} />
+                              <div>
+                                <p className="font-semibold text-gray-900">{participant.nickname}</p>
+                                <p className="text-xs text-gray-500">{participant.amount} {split.currency}</p>
                               </div>
                             </div>
-                          ))}
-                        </div>
+                            <div className="flex items-center gap-2">
+                              {participant.status === 'confirmed' && participant.txId && (
+                                <a
+                                  href={`https://solscan.io/tx/${participant.txId}?cluster=devnet`}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="text-xs text-secondary-600 underline"
+                                >
+                                  <ExternalLink size={12} />
+                                </a>
+                              )}
+                              {participant.status === 'pending' && (
+                                <>
+                                  <button
+                                    onClick={() => copyParticipantLink(generateParticipantLink(split, participant.walletAddress))}
+                                    className="text-xs bg-gray-200 hover:bg-gray-300 text-gray-700 px-2 py-1 rounded transition-colors"
+                                  >
+                                    Copy Link
+                                  </button>
+                                  <button
+                                    onClick={() => shareParticipantViaWhatsApp(split, generateParticipantLink(split, participant.walletAddress), participant)}
+                                    className="text-xs bg-green-100 hover:bg-green-200 text-green-700 px-2 py-1 rounded transition-colors"
+                                  >
+                                    WhatsApp
+                                  </button>
+                                </>
+                              )}
+                              {participant.status === 'failed' && (
+                                <button
+                                  onClick={() => copyParticipantLink(generateParticipantLink(split, participant.walletAddress))}
+                                  className="text-xs bg-red-100 hover:bg-red-200 text-red-700 px-2 py-1 rounded transition-colors"
+                                >
+                                  Retry
+                                </button>
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
 
-                        <div className="flex justify-end">
-                          <button
-                            onClick={() => handleSplitDownloadPDF(split)}
-                            disabled={!allPaid || downloading[`split-${split.id}`]}
-                            className="flex items-center gap-2 bg-primary-500 hover:bg-primary-600 disabled:bg-gray-300 disabled:cursor-not-allowed text-white font-semibold px-4 py-2 rounded-lg transition-colors text-sm"
-                            title={!allPaid ? 'Available when all participants have paid' : undefined}
-                          >
-                            {downloading[`split-${split.id}`] ? <Loader2 size={14} className="animate-spin" /> : <Download size={14} />}
-                            Download Group Receipt PDF
-                          </button>
-                        </div>
+                      <div className="flex justify-end">
+                        <button
+                          onClick={() => handleSplitDownloadPDF(split)}
+                          disabled={!allPaid || downloading[`split-${split.id}`]}
+                          className="flex items-center gap-2 bg-primary-500 hover:bg-primary-600 disabled:bg-gray-300 disabled:cursor-not-allowed text-white font-semibold px-4 py-2 rounded-lg transition-colors text-sm"
+                          title={!allPaid ? 'Available when all participants have paid' : undefined}
+                        >
+                          {downloading[`split-${split.id}`] ? <Loader2 size={14} className="animate-spin" /> : <Download size={14} />}
+                          Download Group Receipt PDF
+                        </button>
                       </div>
                     </div>
-                  );
-                })}
-              </div>
-            )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
 
-            {receipts.length === 0 ? (
-              <div className="bg-white rounded-2xl p-8 shadow-sm border border-gray-100 text-center space-y-3">
-                <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto">
-                  <FileText className="text-gray-400" size={28} />
-                </div>
-                <p className="text-gray-700 font-semibold">No receipts yet</p>
-                <p className="text-sm text-gray-400">Make a payment request or split a bill to generate your first receipt.</p>
+          {receipts.length === 0 ? (
+            <div className="bg-white rounded-2xl p-8 shadow-sm border border-gray-100 text-center space-y-3">
+              <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto">
+                <FileText className="text-gray-400" size={28} />
               </div>
-            ) : (
-              <>
-                <h2 className="text-xl font-bold text-gray-900">Receipts</h2>
-                <p className="text-xs text-gray-400">{receipts.length} receipt{receipts.length !== 1 ? 's' : ''} stored locally</p>
-                <div className="space-y-3">
-                  {receipts.map(receipt => (
+              <p className="text-gray-700 font-semibold">No receipts yet</p>
+              <p className="text-sm text-gray-400">Make a payment request or split a bill to generate your first receipt.</p>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              <h2 className="text-xl font-bold text-gray-900">Receipts</h2>
+              <p className="text-xs text-gray-400">{receipts.length} receipt{receipts.length !== 1 ? 's' : ''} stored locally</p>
+              {receipts.map(receipt => (
                 <div key={receipt.id} className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
                   <div className="p-4 space-y-3">
                     <div className="flex items-start justify-between gap-2">
@@ -529,9 +526,10 @@ export default function ReceiptsPage() {
                   </div>
                 </div>
               ))}
-          </>
-        )}
-      </div>
-    </>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
   );
 }
