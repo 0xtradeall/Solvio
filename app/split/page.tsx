@@ -210,7 +210,7 @@ function SplitPageContent() {
             amount: getShare(i),
             status: "pending" as const
           })),
-          createdAt: new Date().toISOString(),
+          createdAt: Date.now(),
         };
         saveSplit(publicKey.toBase58(), splitData);
         setCurrentSplit(splitData);
@@ -273,7 +273,7 @@ function SplitPageContent() {
         amount: getShare(i),
         status: 'pending' as const,
       })),
-      createdAt: new Date().toISOString(),
+      createdAt: Date.now(),
     };
     saveSplit(publicKey.toBase58(), splitData);
 
