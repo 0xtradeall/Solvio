@@ -51,7 +51,7 @@ function SplitPageContent() {
   const [currency, setCurrency] = useState<Currency>('SOL');
   const [description, setDescription] = useState('');
   const [equalSplit, setEqualSplit] = useState(true);
-  const [participants, setParticipants] = useState<ParticipantState[]>([makeParticipant()]);
+  const [participants, setParticipants] = useState<ParticipantState[]>([]);
   const [isSending, setIsSending] = useState(false);
   const [hasSentAll, setHasSentAll] = useState(false);
   const [totalError, setTotalError] = useState('');
@@ -223,7 +223,13 @@ function SplitPageContent() {
       newParticipants.splice(availableSlots);
     }
     
-    setParticipants(p => [...p, ...newParticipants]);
+    setParticipants(p => {
+      // Filter out empty participants (those with no address and no nickname)
+      const filteredExisting = p.filter(participant => 
+        participant.addressInput.trim() !== '' || participant.nickname.trim() !== ''
+      );
+      return [...filteredExisting, ...newParticipants];
+    });
     closeContactsModal();
   };
 
@@ -429,7 +435,7 @@ function SplitPageContent() {
 
   const statusBadge = (status: TxStatus | 'idle') => {
     if (status === 'pending') return <span className="flex items-center gap-1 text-xs font-semibold text-yellow-800 bg-yellow-100 px-2 py-0.5 rounded-full animate-pulse"><span className="text-sm">⏳</span>Waiting for payment</span>;
-    if (status === 'confirmed') return <span className="flex items-center gap-1 text-xs font-semibold text-green-800 bg-green-100 px-2 py-0.5 rounded-full"><span className="text-sm">✅</span>Confirmed</span>;
+    if (status === 'confirmed') return <span className="flex items-center gap-1 text-xs font-semibold text-green-800 bg-green-100 px-2 py-0.5 rounded-full"><span className="text-sm">✅</span>Paid</span>;
     if (status === 'failed') return <span className="flex items-center gap-1 text-xs font-semibold text-red-800 bg-red-100 px-2 py-0.5 rounded-full"><span className="text-sm">❌</span>Payment failed</span>;
     return null;
   };
@@ -505,8 +511,8 @@ function SplitPageContent() {
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
             <div className="text-sm font-semibold text-gray-700">
               {allConfirmed
-                ? `🎉 Split complete! All ${totalCount} payments confirmed.`
-                : `Split status: ${confirmedCount}/${totalCount} confirmed • ${pendingCount} pending${failedCount ? ` • ${failedCount} failed` : ''}`}
+                ? `🎉 Split complete! All ${totalCount} payments paid.`
+                : `Split status: ${confirmedCount}/${totalCount} paid • ${pendingCount} pending${failedCount ? ` • ${failedCount} failed` : ''}`}
             </div>
             <div className="text-xs text-gray-500">
               {allConfirmed ? `${progressPercent}% collected` : `${progressPercent}% collected`}
@@ -605,9 +611,18 @@ function SplitPageContent() {
               </div>
             </div>
 
-            {participants.map((p, i) => (
-              <div key={i} className={`rounded-2xl p-4 border-2 space-y-3 transition-all ${cardBorder(p.status)}`}>
-                <div className="flex items-center justify-between">
+            {participants.length === 0 ? (
+              <div className="bg-gray-50 border-2 border-dashed border-gray-300 rounded-2xl p-8 text-center">
+                <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <Users className="text-gray-400" size={28} />
+                </div>
+                <p className="text-gray-600 font-semibold mb-2">No participants yet</p>
+                <p className="text-sm text-gray-500">Add participants using '+ Add Person' or 'From Contacts'</p>
+              </div>
+            ) : (
+              participants.map((p, i) => (
+                <div key={i} className={`rounded-2xl p-4 border-2 space-y-3 transition-all ${cardBorder(p.status)}`}>
+                  <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
                     <div className="w-7 h-7 bg-primary-100 rounded-full flex items-center justify-center text-primary-700 font-bold text-xs flex-shrink-0">{i + 1}</div>
                     {statusBadge(p.status)}
@@ -632,7 +647,7 @@ function SplitPageContent() {
                 {(p.status === 'confirmed' || p.status === 'pending') && (
                   <p className="text-xs mt-1 text-gray-600">
                     {p.status === 'confirmed'
-                      ? `Payment received${p.paidAt ? ` — ${new Date(p.paidAt).toLocaleString()}` : ''}`
+                      ? `Paid${p.paidAt ? ` — ${new Date(p.paidAt).toLocaleString()}` : ''}`
                       : `Link sent — waiting for ${getParticipantName(p, i)} to pay`}
                   </p>
                 )}
@@ -695,7 +710,8 @@ function SplitPageContent() {
                   </p>
                 )}
               </div>
-            ))}
+            ))
+            )}
           </div>
 
           {allConfirmed && (
