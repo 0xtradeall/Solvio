@@ -20,7 +20,7 @@ import { Currency, TxStatus, Receipt, Contact } from '@/types';
 interface ParticipantState {
   nickname: string;
   addressInput: string;
-  address: string;
+  walletAddress: string;
   snsName?: string;
   customAmount: string;
   addressError: string;
@@ -29,10 +29,10 @@ interface ParticipantState {
   txError?: string;
 }
 
-const makeParticipant = (nickname = '', address = ''): ParticipantState => ({
+const makeParticipant = (nickname = '', walletAddress = ''): ParticipantState => ({
   nickname,
-  addressInput: address,
-  address,
+  addressInput: walletAddress,
+  walletAddress,
   snsName: undefined,
   customAmount: '',
   addressError: '',
@@ -77,7 +77,7 @@ function SplitPageContent() {
         setCurrentSplit(existingSplit);
         // Update participants status from split data
         const updatedParticipants = participants.map((p, i) => {
-          const splitParticipant = existingSplit.participants.find(sp => sp.address === p.address);
+          const splitParticipant = existingSplit.participants.find(sp => sp.walletAddress === p.walletAddress);
           if (splitParticipant) {
             return {
               ...p,
@@ -164,7 +164,7 @@ function SplitPageContent() {
   );
 
   const isContactAlreadyAdded = (contact: Contact) => {
-    return participants.some(p => p.address === contact.address);
+    return participants.some(p => p.walletAddress === contact.address);
   };
 
   const removeParticipant = (index: number) => {
@@ -190,7 +190,7 @@ function SplitPageContent() {
       next[index] = {
         ...next[index],
         addressInput: raw,
-        address: resolved || (isSns ? '' : raw),
+        walletAddress: resolved || (isSns ? '' : raw),
         snsName: snsName,
         addressError,
       };
@@ -231,9 +231,9 @@ function SplitPageContent() {
       let addrErr = '';
       if (!p.addressInput) {
         addrErr = 'Wallet address is required';
-      } else if (isSNSInput(p.addressInput) && !p.address) {
+      } else if (isSNSInput(p.addressInput) && !p.walletAddress) {
         addrErr = 'Waiting for .sol name to resolve…';
-      } else if (!validateSolanaAddress(p.address)) {
+      } else if (!validateSolanaAddress(p.walletAddress)) {
         addrErr = 'Invalid Solana address';
       }
       if (addrErr) valid = false;
@@ -266,7 +266,7 @@ function SplitPageContent() {
       currency,
       description,
       participants: participants.map((p, i) => ({
-        address: p.address,
+        walletAddress: p.walletAddress,
         nickname: p.nickname || `Person ${i + 1}`,
         amount: getShare(i),
         status: 'pending',
@@ -280,12 +280,12 @@ function SplitPageContent() {
         if (p.status === 'confirmed') return;
         results[i] = { ...results[i], status: 'pending', txId: undefined, txError: undefined };
         setParticipants([...results]);
-        await sendPayment(connection, wallet, p.address, getShare(i), currency, (s) => {
+        await sendPayment(connection, wallet, p.walletAddress, getShare(i), currency, (s) => {
           results[i] = { ...results[i], status: s.status, txId: s.signature, txError: s.error };
           setParticipants([...results]);
           // Update split participant status
           if (s.status === 'confirmed' && s.signature) {
-            updateSplitParticipantStatus(publicKey.toBase58(), splitId, p.address, 'confirmed', s.signature);
+            updateSplitParticipantStatus(publicKey.toBase58(), splitId, p.walletAddress, 'confirmed', s.signature);
           }
         });
       })
@@ -303,7 +303,7 @@ function SplitPageContent() {
         fromAddress: publicKey.toBase58(), toAddress: 'multiple',
         participants: results.map((p, i) => ({
           nickname: p.nickname || `Person ${i + 1}`,
-          address: p.address,
+          address: p.walletAddress,
           snsName: p.snsName,
           amount: getShare(i),
           status: p.status === 'idle' ? 'pending' : p.status,
@@ -324,7 +324,7 @@ function SplitPageContent() {
       return next;
     });
     const share = getShare(index);
-    await sendPayment(connection, wallet, p.address, share, currency, (s) => {
+    await sendPayment(connection, wallet, p.walletAddress, share, currency, (s) => {
       setParticipants(prev => {
         const next = [...prev];
         next[index] = { ...next[index], status: s.status, txId: s.signature, txError: s.error };
@@ -341,7 +341,7 @@ function SplitPageContent() {
       fromAddress: publicKey.toBase58(), toAddress: 'multiple',
       participants: participants.map((p, i) => ({
         nickname: p.nickname || `Person ${i + 1}`,
-        address: p.address,
+        address: p.walletAddress,
         snsName: p.snsName,
         amount: getShare(i),
         status: p.status === 'idle' ? 'pending' : p.status,
@@ -373,7 +373,7 @@ function SplitPageContent() {
     return generateSplitUrl(
       baseUrl,
       splitId,
-      participant.address,
+      participant.walletAddress,
       getShare(index),
       currency,
       description,
@@ -402,7 +402,7 @@ function SplitPageContent() {
     window.open(whatsappUrl, '_blank');
   };
 
-  const hasSendable = participants.length > 0 && !isSending && participants.some(p => p.status !== 'confirmed' && !p.addressError && p.address);
+  const hasSendable = participants.length > 0 && !isSending && participants.some(p => p.status !== 'confirmed' && !p.addressError && p.walletAddress);
   const anyDone = participants.some(p => p.status === 'confirmed' || p.status === 'failed');
 
   return (
@@ -500,7 +500,7 @@ function SplitPageContent() {
                   <div className="flex items-center gap-2">
                     <div className="w-7 h-7 bg-primary-100 rounded-full flex items-center justify-center text-primary-700 font-bold text-xs flex-shrink-0">{i + 1}</div>
                     {statusBadge(p.status)}
-                    {p.address && validateSolanaAddress(p.address) && (
+                    {p.walletAddress && validateSolanaAddress(p.walletAddress) && (
                       <Lock size={14} className="text-green-600" />
                     )}
                   </div>
@@ -540,7 +540,7 @@ function SplitPageContent() {
                 {equalSplit && total > 0 && (
                   <p className="text-xs text-gray-400">Share: <span className="font-bold text-primary-600">{perPerson.toFixed(6)} {currency}</span></p>
                 )}
-                {p.address && validateSolanaAddress(p.address) && (
+                {p.walletAddress && validateSolanaAddress(p.walletAddress) && (
                   <div className="flex gap-2 pt-2">
                     <button
                       onClick={() => copyLink(generateParticipantLink(p, i))}
