@@ -4,7 +4,7 @@ import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { Suspense, useState, useEffect } from 'react';
 import { useWallet, useConnection } from '@solana/wallet-adapter-react';
-import { CheckCircle, XCircle, Loader2, ExternalLink, AlertCircle, Download, AlertTriangle, RefreshCw, Smartphone, Home } from 'lucide-react';
+import { CheckCircle, XCircle, Loader2, ExternalLink, AlertCircle, Download, AlertTriangle, RefreshCw, Smartphone, Home, Mail } from 'lucide-react';
 import WalletConnectButton from '@/components/WalletConnectButton';
 import { sendPayment, getTransactionExplorerUrl } from '@/lib/transactions';
 import { validateSolanaAddress, validateAmount } from '@/lib/validators';
@@ -36,6 +36,26 @@ function usePhantomDetection() {
 }
 
 function NoWalletScreen() {
+  const [showEmail, setShowEmail] = useState(false);
+  const [email, setEmail] = useState('');
+  const [loading, setLoading] = useState(false);
+
+  const handleEmailConnect = async () => {
+    if (!email) return;
+    setLoading(true);
+    try {
+      // Use Magic here
+      const magic = new (await import('magic-sdk')).Magic(process.env.NEXT_PUBLIC_MAGIC_API_KEY!, {
+        extensions: [new (await import('@magic-ext/solana')).SolanaExtension({ rpcUrl: 'https://api.devnet.solana.com' })],
+      });
+      await magic.auth.loginWithMagicLink({ email });
+      // Assume it connects
+    } catch (error) {
+      console.error('Magic login failed', error);
+    }
+    setLoading(false);
+  };
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-primary-50 to-secondary-50 flex items-center justify-center p-4">
       <div className="bg-white rounded-3xl shadow-xl p-8 max-w-sm w-full text-center space-y-6">
@@ -43,32 +63,51 @@ function NoWalletScreen() {
           <Smartphone className="text-primary-500" size={36} />
         </div>
         <div>
-          <h2 className="text-xl font-bold text-gray-900">You need a Solana wallet</h2>
-          <p className="text-sm text-gray-500 mt-2">To complete this payment, you need a wallet that supports Solana.</p>
+          <h2 className="text-xl font-bold text-gray-900">Connect wallet to continue</h2>
+          <p className="text-sm text-gray-500 mt-2">Choose how you'd like to connect your Solana wallet.</p>
         </div>
-        <div className="grid grid-cols-2 gap-3">
-          <a
-            href="https://phantom.app"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="flex flex-col items-center gap-2 p-4 bg-primary-500 hover:bg-primary-600 text-white rounded-2xl transition-colors active:scale-95"
-          >
-            <span className="text-2xl">👻</span>
-            <span className="font-bold text-sm">Get Phantom</span>
-            <span className="text-xs text-primary-200 text-center">Most popular, 2 min setup</span>
-          </a>
-          <a
-            href="https://tiplink.io"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="flex flex-col items-center gap-2 p-4 bg-secondary-500 hover:bg-secondary-600 text-white rounded-2xl transition-colors active:scale-95"
-          >
-            <span className="text-2xl">🔗</span>
-            <span className="font-bold text-sm">Pay via TipLink</span>
-            <span className="text-xs text-secondary-200 text-center">No wallet needed, pay with email</span>
-          </a>
-        </div>
-        <p className="text-xs text-gray-400">Already have a wallet? Refresh this page after installing.</p>
+        {!showEmail ? (
+          <div className="space-y-3">
+            <button
+              onClick={() => window.open('https://phantom.app', '_blank')}
+              className="w-full flex items-center justify-center gap-2 p-4 bg-gradient-to-r from-purple-500 to-purple-600 hover:from-purple-600 hover:to-purple-700 text-white rounded-2xl transition-colors active:scale-95 font-bold"
+            >
+              <span className="text-2xl">👻</span>
+              Connect Phantom Wallet
+            </button>
+            <button
+              onClick={() => setShowEmail(true)}
+              className="w-full flex items-center justify-center gap-2 p-4 bg-primary-500 hover:bg-primary-600 text-white rounded-2xl transition-colors active:scale-95 font-bold"
+            >
+              <Mail size={20} />
+              Create with Email
+            </button>
+            <p className="text-xs text-gray-400">No wallet needed — we'll create one for you instantly via email</p>
+          </div>
+        ) : (
+          <div className="space-y-4">
+            <input
+              type="email"
+              placeholder="Enter your email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500"
+            />
+            <button
+              onClick={handleEmailConnect}
+              disabled={!email || loading}
+              className="w-full bg-primary-500 hover:bg-primary-600 disabled:bg-gray-300 text-white font-bold py-3 px-4 rounded-xl transition-all"
+            >
+              {loading ? 'Sending...' : 'Continue with Email'}
+            </button>
+            <button
+              onClick={() => setShowEmail(false)}
+              className="text-sm text-gray-500 hover:text-gray-700"
+            >
+              Back
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );

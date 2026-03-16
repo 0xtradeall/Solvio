@@ -77,7 +77,7 @@ function LandingNav() {
 
   const links = [
     { href: '#features', label: 'Features' },
-    { href: '#why', label: 'Why Solvio' },
+    { href: '#why-solvio', label: 'Why Solvio' },
     { href: '#contact', label: 'Contact' },
   ];
 
@@ -88,10 +88,12 @@ function LandingNav() {
 
         <div className="hidden md:flex items-center gap-6">
           {links.map(l => (
-            <a key={l.href} href={l.href}
+            <button key={l.href} onClick={() => {
+              document.getElementById(l.href.slice(1))?.scrollIntoView({ behavior: 'smooth' });
+            }}
               className={`text-sm font-medium hover:text-primary-400 transition-colors ${scrolled ? 'text-gray-700' : 'text-white/90'}`}>
               {l.label}
-            </a>
+            </button>
           ))}
           <Link href="/request"
             className="bg-primary-500 hover:bg-primary-600 active:scale-95 text-white font-bold px-5 py-2.5 rounded-xl transition-all text-sm">
@@ -110,10 +112,13 @@ function LandingNav() {
         <div className="md:hidden bg-white border-t border-gray-100 shadow-lg">
           <div className="max-w-5xl mx-auto px-4 py-4 space-y-1">
             {links.map(l => (
-              <a key={l.href} href={l.href} onClick={() => setOpen(false)}
+              <button key={l.href} onClick={() => {
+                setOpen(false);
+                document.getElementById(l.href.slice(1))?.scrollIntoView({ behavior: 'smooth' });
+              }}
                 className="block py-3 px-3 rounded-xl text-gray-700 hover:bg-gray-50 font-medium transition-colors">
                 {l.label}
-              </a>
+              </button>
             ))}
             <Link href="/request" onClick={() => setOpen(false)}
               className="block w-full text-center bg-primary-500 hover:bg-primary-600 text-white font-bold px-5 py-3 rounded-xl transition-colors mt-2">
@@ -231,7 +236,7 @@ function FeaturesSection() {
 
 function WhySolvioSection() {
   return (
-    <section id="why" className="py-24 bg-gray-50">
+    <section id="why-solvio" className="py-24 bg-gray-50">
       <div className="max-w-5xl mx-auto px-4 sm:px-6">
         <div className="text-center mb-14">
           <span className="bg-secondary-100 text-secondary-700 text-xs font-bold px-3 py-1 rounded-full uppercase tracking-wider">Comparison</span>

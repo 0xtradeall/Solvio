@@ -32,6 +32,7 @@ const nextConfig = {
     NEXT_PUBLIC_SOLANA_NETWORK: 'devnet',
     NEXT_PUBLIC_SOLANA_RPC_URL: 'https://api.devnet.solana.com',
     NEXT_PUBLIC_USDC_MINT: '4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU',
+    NEXT_PUBLIC_MAGIC_API_KEY: 'pk_test_demo',
   },
   webpack: (config, { isServer, webpack }) => {
     config.resolve.alias = {

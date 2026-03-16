@@ -1,8 +1,9 @@
 'use client';
 
+import { useState } from 'react';
 import { useWallet } from '@solana/wallet-adapter-react';
-import { useWalletModal } from '@solana/wallet-adapter-react-ui';
 import { Wallet, LogOut } from 'lucide-react';
+import WalletConnectModal from './WalletConnectModal';
 
 interface Props {
   className?: string;
@@ -13,10 +14,10 @@ interface Props {
 
 export default function WalletConnectButton({ className = '', showAddress = false, onConnect, onDisconnect }: Props) {
   const { publicKey, connected, disconnect } = useWallet();
-  const { setVisible } = useWalletModal();
+  const [modalOpen, setModalOpen] = useState(false);
 
   const handleConnect = () => {
-    setVisible(true);
+    setModalOpen(true);
     onConnect?.();
   };
 
@@ -45,12 +46,15 @@ export default function WalletConnectButton({ className = '', showAddress = fals
   }
 
   return (
-    <button
-      onClick={handleConnect}
-      className={`flex items-center justify-center gap-2 bg-primary-500 hover:bg-primary-600 text-white px-6 py-3 rounded-xl font-semibold transition-colors min-h-[44px] w-full ${className}`}
-    >
-      <Wallet size={18} />
-      Connect Phantom Wallet
-    </button>
+    <>
+      <button
+        onClick={handleConnect}
+        className={`flex items-center justify-center gap-2 bg-primary-500 hover:bg-primary-600 text-white px-6 py-3 rounded-xl font-semibold transition-colors min-h-[44px] w-full ${className}`}
+      >
+        <Wallet size={18} />
+        Connect Wallet
+      </button>
+      <WalletConnectModal isOpen={modalOpen} onClose={() => setModalOpen(false)} />
+    </>
   );
 }
