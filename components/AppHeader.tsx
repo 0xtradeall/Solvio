@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { useWallet } from '@solana/wallet-adapter-react';
 import { useConnection } from '@solana/wallet-adapter-react';
 import { SolvioLogo } from './SolvioLogo';
-import { Home, Copy, LogOut, Check, ChevronDown } from 'lucide-react';
+import { Copy, LogOut, Check, ChevronDown } from 'lucide-react';
 
 export default function AppHeader() {
   const { publicKey, connected, disconnect } = useWallet();
@@ -65,8 +65,7 @@ export default function AppHeader() {
           href="/"
           className="flex items-center gap-1.5 text-gray-400 hover:text-primary-600 transition-colors text-sm font-medium cursor-pointer"
         >
-          <Home size={15} />
-          <span className="hidden sm:inline">Home</span>
+          <span>🏠 Home</span>
         </Link>
 
         {/* Centred logo */}
