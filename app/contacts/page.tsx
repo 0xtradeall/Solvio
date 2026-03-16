@@ -18,6 +18,7 @@ export default function ContactsPage() {
   const router = useRouter();
   const [modalOpen, setModalOpen] = useState(false);
   const [contacts, setContacts] = useState<Contact[]>([]);
+  const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState(emptyForm);
   const [errors, setErrors] = useState<{ nickname?: string; address?: string }>({});
