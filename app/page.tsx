@@ -84,7 +84,9 @@ function LandingNav() {
   return (
     <nav className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${scrolled ? 'bg-white/95 backdrop-blur-sm shadow-sm' : 'bg-transparent'}`}>
       <div className="max-w-5xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between">
-        <SolvioLogo size={32} wordmarkColor={scrolled ? 'text-gray-900' : 'text-white'} />
+        <Link href="/">
+          <SolvioLogo size={32} wordmarkColor={scrolled ? 'text-gray-900' : 'text-white'} />
+        </Link>
 
         <div className="hidden md:flex items-center gap-6">
           {links.map(l => (

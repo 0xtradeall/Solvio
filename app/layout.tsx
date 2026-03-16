@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import './globals.css';
 import { SolvioWalletProvider } from '@/components/providers/WalletProvider';
 import AppShell from '@/components/AppShell';
+import DevnetBanner from '@/components/DevnetBanner';
 
 export const metadata: Metadata = {
   metadataBase: new URL('https://solvio.replit.app'),
@@ -33,6 +34,8 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <meta name="theme-color" content="#7C3AED" />
       </head>
       <body suppressHydrationWarning>
+        <DevnetBanner />
+        <div style={{ height: '32px' }} />
         <SolvioWalletProvider>
           <AppShell>
             {children}

@@ -4,7 +4,6 @@ import { useEffect } from 'react';
 import { usePathname } from 'next/navigation';
 import AppHeader from './AppHeader';
 import BottomNav from './BottomNav';
-import DevnetBanner from './DevnetBanner';
 
 export default function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
@@ -23,9 +22,8 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
 
   return (
     <>
-      <DevnetBanner />
       {isAppPage && <AppHeader />}
-      <main className={isAppPage ? 'min-h-screen pb-20 pt-8' : ''}>
+      <main className={isAppPage ? 'min-h-screen pb-20' : ''}>
         <div className={isAppPage ? 'max-w-lg mx-auto' : ''}>
           {children}
         </div>
