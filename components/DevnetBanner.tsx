@@ -25,7 +25,7 @@ export default function DevnetBanner() {
   if (!shouldShow || !isVisible) return null;
 
   return (
-    <div className="fixed top-0 left-0 right-0 h-8 bg-gradient-to-r from-amber-500 to-amber-600 text-amber-900 text-xs font-medium flex items-center justify-center z-[9999] overflow-hidden">
+    <div className="w-full h-8 bg-gradient-to-r from-amber-500 to-amber-600 text-amber-900 text-xs font-medium flex items-center justify-center overflow-hidden relative">
       <div className="flex items-center whitespace-nowrap animate-marquee">
         <span>
           ⚠️ DEVNET MODE — This app runs on Solana Devnet. No real money is used. Transactions use test SOL only. Do not send real funds. •

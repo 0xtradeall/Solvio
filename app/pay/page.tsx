@@ -6,6 +6,7 @@ import { Suspense, useState, useEffect } from 'react';
 import { useWallet, useConnection } from '@solana/wallet-adapter-react';
 import { CheckCircle, XCircle, Loader2, ExternalLink, AlertCircle, Download, AlertTriangle, RefreshCw, Smartphone, Home, Mail } from 'lucide-react';
 import WalletConnectButton from '@/components/WalletConnectButton';
+import DevnetBanner from '@/components/DevnetBanner';
 import { sendPayment, getTransactionExplorerUrl } from '@/lib/transactions';
 import { validateSolanaAddress, validateAmount } from '@/lib/validators';
 import { saveReceipt } from '@/lib/storage';
@@ -58,6 +59,7 @@ function NoWalletScreen() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-primary-50 to-secondary-50 flex items-center justify-center p-4">
+      <DevnetBanner />
       <div className="bg-white rounded-3xl shadow-xl p-8 max-w-sm w-full text-center space-y-6">
         <div className="w-20 h-20 bg-primary-100 rounded-full flex items-center justify-center mx-auto">
           <Smartphone className="text-primary-500" size={36} />

@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import { Wallet, Trash2, Info, ExternalLink, AlertTriangle, Shield, Smartphone } from 'lucide-react';
 import WalletConnectButton from '@/components/WalletConnectButton';
 import WalletConnectModal from '@/components/WalletConnectModal';
+import DevnetBanner from '@/components/DevnetBanner';
 import { clearReceipts, getReceipts } from '@/lib/storage';
 
 export default function SettingsPage() {
@@ -41,6 +42,7 @@ export default function SettingsPage() {
         <WalletConnectModal isOpen={modalOpen} onClose={() => { setModalOpen(false); router.push('/'); }} />
       ) : (
         <>
+          <DevnetBanner />
           <div className="pt-4">
             <h1 className="text-2xl font-bold text-gray-900">Settings</h1>
             <p className="text-sm text-gray-500 mt-0.5">Manage your wallet and app preferences</p>

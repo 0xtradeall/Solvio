@@ -6,6 +6,7 @@ import { Suspense, useState, useEffect } from 'react';
 import { useWallet, useConnection } from '@solana/wallet-adapter-react';
 import { CheckCircle, XCircle, Loader2, ExternalLink, AlertCircle, Download, Home } from 'lucide-react';
 import WalletConnectButton from '@/components/WalletConnectButton';
+import DevnetBanner from '@/components/DevnetBanner';
 import { sendPayment, getTransactionExplorerUrl } from '@/lib/transactions';
 import { validateSolanaAddress, validateAmount } from '@/lib/validators';
 import { saveReceipt } from '@/lib/storage';
@@ -115,6 +116,7 @@ function SplitPayPageContent() {
 
   return (
     <div className="min-h-screen bg-gray-50 pb-8">
+      <DevnetBanner />
       <div className="p-4 space-y-5 max-w-md mx-auto">
         <div className="pt-4 text-center">
           <div className="w-16 h-16 bg-primary-50 rounded-full flex items-center justify-center mx-auto mb-3">

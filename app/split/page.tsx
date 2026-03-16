@@ -8,6 +8,7 @@ import { Suspense } from 'react';
 import { Plus, Trash2, AlertCircle, CheckCircle, XCircle, Loader2, RefreshCw, Users, Lock, Copy, Share2, User, Search, X } from 'lucide-react';
 import WalletConnectButton from '@/components/WalletConnectButton';
 import WalletConnectModal from '@/components/WalletConnectModal';
+import DevnetBanner from '@/components/DevnetBanner';
 import SnsAddressInput from '@/components/SnsAddressInput';
 import { validateSolanaAddress, validateAmount } from '@/lib/validators';
 import { isSNSInput } from '@/lib/sns';
@@ -626,9 +627,11 @@ function SplitPageContent() {
   const progressPercent = totalCount ? Math.round((confirmedCount / totalCount) * 100) : 0;
 
   return (
-    <div className="p-4 space-y-5">
-      <div className="pt-4">
-        <h1 className="text-2xl font-bold text-gray-900">Split the Bill</h1>
+    <>
+      <DevnetBanner />
+      <div className="p-4 space-y-5">
+        <div className="pt-4">
+          <h1 className="text-2xl font-bold text-gray-900">Split the Bill</h1>
         <p className="text-sm text-gray-500 mt-0.5">Pay multiple people simultaneously</p>
       </div>
 
@@ -1056,7 +1059,7 @@ function SplitPageContent() {
           )}
         </>
       )}
-    </div>
+    </>
   );
 }
 

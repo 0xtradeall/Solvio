@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import { Plus, Trash2, Edit3, X, Send, Users, Contact2, Check, AlertCircle } from 'lucide-react';
 import WalletConnectButton from '@/components/WalletConnectButton';
 import WalletConnectModal from '@/components/WalletConnectModal';
+import DevnetBanner from '@/components/DevnetBanner';
 import SnsAddressInput from '@/components/SnsAddressInput';
 import { getContacts, saveContact, deleteContact } from '@/lib/storage';
 import { validateSolanaAddress } from '@/lib/validators';
@@ -113,6 +114,7 @@ export default function ContactsPage() {
 
   return (
     <div className="p-4 space-y-5 pb-20">
+      <DevnetBanner />
       <div className="pt-4">
         <h1 className="text-2xl font-bold text-gray-900">Contacts</h1>
         <p className="text-sm text-gray-500 mt-0.5">Saved Solana wallet addresses</p>

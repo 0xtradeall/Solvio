@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import { Download, Share2, FileText, ChevronDown, ChevronUp, ExternalLink, Loader2, Mail, X, Send } from 'lucide-react';
 import WalletConnectButton from '@/components/WalletConnectButton';
 import WalletConnectModal from '@/components/WalletConnectModal';
+import DevnetBanner from '@/components/DevnetBanner';
 import { getReceipts } from '@/lib/storage';
 import { generateReceiptPDF } from '@/lib/pdf';
 import { getTransactionExplorerUrl } from '@/lib/transactions';
@@ -327,6 +328,7 @@ export default function ReceiptsPage() {
 
   return (
     <div className="p-4 space-y-5 pb-20">
+      <DevnetBanner />
       {emailReceipt && <EmailModal receipt={emailReceipt} onClose={() => setEmailReceipt(null)} />}
 
       <div className="pt-4">

@@ -7,8 +7,8 @@ import { QRCodeSVG } from 'qrcode.react';
 import { Copy, Share2, Download, CheckCircle, Loader2, RefreshCw, ExternalLink, Users, X, Lock, Globe } from 'lucide-react';
 import WalletConnectButton from '@/components/WalletConnectButton';
 import WalletConnectModal from '@/components/WalletConnectModal';
+import DevnetBanner from '@/components/DevnetBanner';
 import SnsAddressInput from '@/components/SnsAddressInput';
-import { isSNSInput } from '@/lib/sns';
 import { generatePaymentUrl, pollForIncomingPayment, getTransactionExplorerUrl } from '@/lib/transactions';
 import { validateAmount } from '@/lib/validators';
 import { saveReceipt, getContacts } from '@/lib/storage';
@@ -215,9 +215,11 @@ export default function RequestPage() {
   };
 
   return (
-    <div className="p-4 space-y-5 pb-20">
-      <div className="pt-4">
-        <h1 className="text-2xl font-bold text-gray-900">Request Payment</h1>
+    <>
+      <DevnetBanner />
+      <div className="p-4 space-y-5 pb-20">
+        <div className="pt-4">
+          <h1 className="text-2xl font-bold text-gray-900">Request Payment</h1>
         <p className="text-sm text-gray-500 mt-0.5">Create a shareable link or QR code</p>
       </div>
 
@@ -498,6 +500,6 @@ export default function RequestPage() {
           )}
         </>
       )}
-    </div>
+    </>
   );
 }
