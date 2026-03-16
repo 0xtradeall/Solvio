@@ -11,6 +11,7 @@ import DevnetBanner from '@/components/DevnetBanner';
 import SnsAddressInput from '@/components/SnsAddressInput';
 import { generatePaymentUrl, pollForIncomingPayment, getTransactionExplorerUrl } from '@/lib/transactions';
 import { validateAmount } from '@/lib/validators';
+import { isSNSInput } from '@/lib/sns';
 import { saveReceipt, getContacts } from '@/lib/storage';
 import { generateReceiptPDF } from '@/lib/pdf';
 import { Receipt, Currency, Contact } from '@/types';
