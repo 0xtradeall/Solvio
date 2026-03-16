@@ -2,9 +2,11 @@
 
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { useWallet, useConnection } from '@solana/wallet-adapter-react';
+import { useRouter } from 'next/navigation';
 import { QRCodeSVG } from 'qrcode.react';
 import { Copy, Share2, Download, CheckCircle, Loader2, RefreshCw, ExternalLink, Users, X, Lock, Globe } from 'lucide-react';
 import WalletConnectButton from '@/components/WalletConnectButton';
+import WalletConnectModal from '@/components/WalletConnectModal';
 import SnsAddressInput from '@/components/SnsAddressInput';
 import { isSNSInput } from '@/lib/sns';
 import { generatePaymentUrl, pollForIncomingPayment, getTransactionExplorerUrl } from '@/lib/transactions';
@@ -18,6 +20,8 @@ type PollStatus = 'idle' | 'polling' | 'received' | 'timeout';
 export default function RequestPage() {
   const { publicKey, connected } = useWallet();
   const { connection } = useConnection();
+  const router = useRouter();
+  const [modalOpen, setModalOpen] = useState(false);
   const [amount, setAmount] = useState('');
   const [currency, setCurrency] = useState<Currency>('SOL');
   const [note, setNote] = useState('');
@@ -52,6 +56,14 @@ export default function RequestPage() {
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [showContacts]);
+
+  useEffect(() => {
+    if (!connected) {
+      setModalOpen(true);
+    } else {
+      setModalOpen(false);
+    }
+  }, [connected]);
 
   const handleSendToChange = (raw: string, resolved: string) => {
     setSendToInput(raw);
@@ -210,13 +222,7 @@ export default function RequestPage() {
       </div>
 
       {!connected ? (
-        <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100 text-center space-y-4">
-          <div className="w-16 h-16 bg-primary-50 rounded-full flex items-center justify-center mx-auto">
-            <span className="text-3xl">👻</span>
-          </div>
-          <p className="text-gray-600 font-medium">Connect your Phantom wallet to get started</p>
-          <WalletConnectButton />
-        </div>
+        <WalletConnectModal isOpen={modalOpen} onClose={() => { setModalOpen(false); router.push('/'); }} />
       ) : (
         <>
           <div className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100 space-y-4">

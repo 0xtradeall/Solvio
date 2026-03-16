@@ -2,10 +2,12 @@
 
 import { useState, useCallback, useEffect } from 'react';
 import { useWallet } from '@solana/wallet-adapter-react';
+import { useRouter } from 'next/navigation';
 import { useSearchParams } from 'next/navigation';
 import { Suspense } from 'react';
 import { Plus, Trash2, AlertCircle, CheckCircle, XCircle, Loader2, RefreshCw, Users, Lock, Copy, Share2, User, Search, X } from 'lucide-react';
 import WalletConnectButton from '@/components/WalletConnectButton';
+import WalletConnectModal from '@/components/WalletConnectModal';
 import SnsAddressInput from '@/components/SnsAddressInput';
 import { validateSolanaAddress, validateAmount } from '@/lib/validators';
 import { isSNSInput } from '@/lib/sns';
@@ -45,7 +47,9 @@ const makeParticipant = (nickname = '', walletAddress = ''): ParticipantState =>
 function SplitPageContent() {
   const wallet = useWallet();
   const { publicKey, connected } = wallet;
+  const router = useRouter();
   const searchParams = useSearchParams();
+  const [modalOpen, setModalOpen] = useState(false);
 
   const [totalAmount, setTotalAmount] = useState('');
   const [currency, setCurrency] = useState<Currency>('SOL');
@@ -117,6 +121,14 @@ function SplitPageContent() {
       setContacts([]);
     }
   }, [publicKey]);
+
+  useEffect(() => {
+    if (!connected) {
+      setModalOpen(true);
+    } else {
+      setModalOpen(false);
+    }
+  }, [connected]);
 
   useEffect(() => {
     if (publicKey) {
@@ -666,13 +678,7 @@ function SplitPageContent() {
       )}
 
       {!connected ? (
-        <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100 text-center space-y-4">
-          <div className="w-16 h-16 bg-primary-50 rounded-full flex items-center justify-center mx-auto">
-            <Users className="text-primary-400" size={28} />
-          </div>
-          <p className="text-gray-600 font-medium">Connect your wallet to split bills</p>
-          <WalletConnectButton />
-        </div>
+        <WalletConnectModal isOpen={modalOpen} onClose={() => { setModalOpen(false); router.push('/'); }} />
       ) : (
         <>
 

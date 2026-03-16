@@ -1,15 +1,27 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useWallet } from '@solana/wallet-adapter-react';
+import { useRouter } from 'next/navigation';
 import { Wallet, Trash2, Info, ExternalLink, AlertTriangle, Shield, Smartphone } from 'lucide-react';
 import WalletConnectButton from '@/components/WalletConnectButton';
+import WalletConnectModal from '@/components/WalletConnectModal';
 import { clearReceipts, getReceipts } from '@/lib/storage';
 
 export default function SettingsPage() {
   const { publicKey, connected, disconnect } = useWallet();
+  const router = useRouter();
+  const [modalOpen, setModalOpen] = useState(false);
   const [showClearConfirm, setShowClearConfirm] = useState(false);
   const [cleared, setCleared] = useState(false);
+
+  useEffect(() => {
+    if (!connected) {
+      setModalOpen(true);
+    } else {
+      setModalOpen(false);
+    }
+  }, [connected]);
 
   const handleClearReceipts = () => {
     if (publicKey) {
@@ -25,10 +37,14 @@ export default function SettingsPage() {
 
   return (
     <div className="p-4 space-y-5 pb-20">
-      <div className="pt-4">
-        <h1 className="text-2xl font-bold text-gray-900">Settings</h1>
-        <p className="text-sm text-gray-500 mt-0.5">Manage your wallet and app preferences</p>
-      </div>
+      {!connected ? (
+        <WalletConnectModal isOpen={modalOpen} onClose={() => { setModalOpen(false); router.push('/'); }} />
+      ) : (
+        <>
+          <div className="pt-4">
+            <h1 className="text-2xl font-bold text-gray-900">Settings</h1>
+            <p className="text-sm text-gray-500 mt-0.5">Manage your wallet and app preferences</p>
+          </div>
 
       <div className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100 space-y-4">
         <div className="flex items-center gap-2 font-bold text-gray-800">
@@ -193,6 +209,8 @@ export default function SettingsPage() {
           Add Solvio to your home screen for the best mobile experience. In your browser, tap Share → Add to Home Screen.
         </p>
       </div>
-    </div>
-  );
+      </>
+    )}
+  </div>
+);
 }

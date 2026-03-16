@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useWalletModal } from '@solana/wallet-adapter-react-ui';
-import { Mail, Wallet } from 'lucide-react';
+import { Mail, Wallet, X } from 'lucide-react';
 
 interface WalletConnectModalProps {
   isOpen: boolean;
@@ -57,6 +57,12 @@ export default function WalletConnectModal({ isOpen, onClose }: WalletConnectMod
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
       <div className="bg-white rounded-3xl p-6 max-w-md w-full mx-4">
+        <button
+          onClick={onClose}
+          className="absolute top-3 right-3 w-8 h-8 bg-gray-100 hover:bg-gray-200 rounded-full flex items-center justify-center text-gray-600 hover:text-gray-800 transition-colors"
+        >
+          <X size={16} />
+        </button>
         <h2 className="text-xl font-bold text-center mb-6">Connect wallet to continue</h2>
 
         <div className="flex mb-6">

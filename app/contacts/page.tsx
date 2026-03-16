@@ -5,6 +5,7 @@ import { useWallet } from '@solana/wallet-adapter-react';
 import { useRouter } from 'next/navigation';
 import { Plus, Trash2, Edit3, X, Send, Users, Contact2, Check, AlertCircle } from 'lucide-react';
 import WalletConnectButton from '@/components/WalletConnectButton';
+import WalletConnectModal from '@/components/WalletConnectModal';
 import SnsAddressInput from '@/components/SnsAddressInput';
 import { getContacts, saveContact, deleteContact } from '@/lib/storage';
 import { validateSolanaAddress } from '@/lib/validators';
@@ -15,8 +16,8 @@ const emptyForm = { nickname: '', addressInput: '', resolvedAddress: '', snsName
 export default function ContactsPage() {
   const { publicKey, connected } = useWallet();
   const router = useRouter();
+  const [modalOpen, setModalOpen] = useState(false);
   const [contacts, setContacts] = useState<Contact[]>([]);
-  const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState(emptyForm);
   const [errors, setErrors] = useState<{ nickname?: string; address?: string }>({});
@@ -27,6 +28,14 @@ export default function ContactsPage() {
     if (publicKey) setContacts(getContacts(publicKey.toBase58()));
     else setContacts([]);
   }, [publicKey]);
+
+  useEffect(() => {
+    if (!connected) {
+      setModalOpen(true);
+    } else {
+      setModalOpen(false);
+    }
+  }, [connected]);
 
   const refresh = () => {
     if (publicKey) setContacts(getContacts(publicKey.toBase58()));
@@ -109,13 +118,7 @@ export default function ContactsPage() {
       </div>
 
       {!connected ? (
-        <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100 text-center space-y-4">
-          <div className="w-16 h-16 bg-primary-50 rounded-full flex items-center justify-center mx-auto">
-            <Contact2 className="text-primary-400" size={28} />
-          </div>
-          <p className="text-gray-600 font-medium">Connect your wallet to manage contacts</p>
-          <WalletConnectButton />
-        </div>
+        <WalletConnectModal isOpen={modalOpen} onClose={() => { setModalOpen(false); router.push('/'); }} />
       ) : (
         <>
           {saved && (

@@ -2,8 +2,10 @@
 
 import { useEffect, useState } from 'react';
 import { useWallet } from '@solana/wallet-adapter-react';
+import { useRouter } from 'next/navigation';
 import { Download, Share2, FileText, ChevronDown, ChevronUp, ExternalLink, Loader2, Mail, X, Send } from 'lucide-react';
 import WalletConnectButton from '@/components/WalletConnectButton';
+import WalletConnectModal from '@/components/WalletConnectModal';
 import { getReceipts } from '@/lib/storage';
 import { generateReceiptPDF } from '@/lib/pdf';
 import { getTransactionExplorerUrl } from '@/lib/transactions';
@@ -156,6 +158,8 @@ https://solvio.app
 
 export default function ReceiptsPage() {
   const { publicKey, connected } = useWallet();
+  const router = useRouter();
+  const [modalOpen, setModalOpen] = useState(false);
   const [receipts, setReceipts] = useState<Receipt[]>([]);
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
   const [downloading, setDownloading] = useState<Record<string, boolean>>({});
@@ -166,6 +170,14 @@ export default function ReceiptsPage() {
     if (publicKey) setReceipts(getReceipts(publicKey.toBase58()));
     else setReceipts([]);
   }, [publicKey]);
+
+  useEffect(() => {
+    if (!connected) {
+      setModalOpen(true);
+    } else {
+      setModalOpen(false);
+    }
+  }, [connected]);
 
   useEffect(() => {
     if (publicKey) {
@@ -323,14 +335,7 @@ export default function ReceiptsPage() {
       </div>
 
       {!connected ? (
-        <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100 text-center space-y-4">
-          <div className="w-16 h-16 bg-primary-50 rounded-full flex items-center justify-center mx-auto">
-            <FileText className="text-primary-400" size={28} />
-          </div>
-          <p className="text-gray-600 font-medium">Connect your wallet to view receipts</p>
-          <p className="text-sm text-gray-400">Receipts are stored locally, tied to your wallet address.</p>
-          <WalletConnectButton />
-        </div>
+        <WalletConnectModal isOpen={modalOpen} onClose={() => { setModalOpen(false); router.push('/'); }} />
       ) : (
         <div className="space-y-6">
           {activeSplits.length > 0 && (
