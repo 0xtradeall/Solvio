@@ -1059,8 +1059,9 @@ function SplitPageContent() {
           )}
         </>
       )}
-    </>
-  );
+    </div>
+  </>
+);
 }
 
 export default function SplitPage() {
