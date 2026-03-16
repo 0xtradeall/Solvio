@@ -1,14 +1,8 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useWalletModal } from '@solana/wallet-adapter-react-ui';
 import { Mail, Wallet } from 'lucide-react';
-import { Magic } from 'magic-sdk';
-import { SolanaExtension } from '@magic-ext/solana';
-
-const magic = new Magic(process.env.NEXT_PUBLIC_MAGIC_API_KEY!, {
-  extensions: [new SolanaExtension({ rpcUrl: 'https://api.devnet.solana.com' })],
-});
 
 interface WalletConnectModalProps {
   isOpen: boolean;
@@ -19,7 +13,24 @@ export default function WalletConnectModal({ isOpen, onClose }: WalletConnectMod
   const [activeTab, setActiveTab] = useState<'wallet' | 'email'>('wallet');
   const [email, setEmail] = useState('');
   const [loading, setLoading] = useState(false);
+  const [magic, setMagic] = useState<any>(null);
   const { setVisible } = useWalletModal();
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const { Magic } = require('magic-sdk');
+      const { SolanaExtension } = require('@magic-ext/solana');
+      const magicInstance = new Magic(
+        process.env.NEXT_PUBLIC_MAGIC_API_KEY || 'pk_test_demo',
+        {
+          extensions: [new SolanaExtension({ 
+            rpcUrl: 'https://api.devnet.solana.com' 
+          })]
+        }
+      );
+      setMagic(magicInstance);
+    }
+  }, []);
 
   const handleWalletConnect = () => {
     setVisible(true);
@@ -27,7 +38,7 @@ export default function WalletConnectModal({ isOpen, onClose }: WalletConnectMod
   };
 
   const handleEmailConnect = async () => {
-    if (!email) return;
+    if (!email || !magic) return;
     setLoading(true);
     try {
       await magic.auth.loginWithMagicLink({ email });
