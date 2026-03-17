@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useWalletModal } from '@solana/wallet-adapter-react-ui';
 import { Mail, Wallet } from 'lucide-react';
+import Image from 'next/image';
 
 interface WalletConnectModalProps {
   isOpen: boolean;
@@ -51,16 +52,46 @@ export default function WalletConnectModal({ isOpen, onClose }: WalletConnectMod
         </div>
 
         {activeTab === 'wallet' && (
-          <div className="space-y-4">
-            <button
-              onClick={handleWalletConnect}
-              className="w-full bg-gradient-to-r from-purple-500 to-purple-600 hover:from-purple-600 hover:to-purple-700 text-white font-bold py-3 px-4 rounded-xl transition-all"
-            >
-              <Wallet className="inline mr-2" size={18} />
-              Connect Phantom Wallet
-            </button>
-            {/* Add other wallet options if needed */}
-          </div>
+          <>
+            {/* Helper message for TipLink users */}
+            <div className="mb-3">
+              <div className="bg-purple-50 border border-purple-200 text-purple-700 rounded-lg px-3 py-2 text-xs text-center">
+                Just created a TipLink wallet? <b>Click TipLink below to connect it.</b>
+              </div>
+            </div>
+            <div className="space-y-3">
+              {/* Phantom Wallet */}
+              <WalletOption
+                name="Phantom"
+                iconSrc="/phantom-icon.png"
+                onConnect={handleWalletConnect}
+                installUrl="https://phantom.app"
+                recommended
+              />
+              {/* TipLink Wallet */}
+              <WalletOption
+                name="TipLink"
+                iconSrc="/tiplink-icon.png"
+                onConnect={handleWalletConnect}
+                description="Connect your TipLink wallet"
+                highlight
+              />
+              {/* Solflare Wallet */}
+              <WalletOption
+                name="Solflare"
+                iconSrc="/solflare-icon.png"
+                onConnect={handleWalletConnect}
+                installUrl="https://solflare.com"
+              />
+              {/* Backpack Wallet */}
+              <WalletOption
+                name="Backpack"
+                iconSrc="/backpack-icon.png"
+                onConnect={handleWalletConnect}
+                installUrl="https://backpack.app"
+              />
+            </div>
+          </>
         )}
 
         {activeTab === 'email' && (
@@ -94,4 +125,54 @@ export default function WalletConnectModal({ isOpen, onClose }: WalletConnectMod
       </div>
     </div>
   );
+
+  // WalletOption component (inline for simplicity)
+  function WalletOption({ name, iconSrc, onConnect, installUrl, description, recommended, highlight }: any) {
+    // Simulate detection (in real app, check window object for wallet)
+    const detected = false;
+    return (
+      <div className={`flex items-center gap-3 border rounded-xl px-4 py-3 ${highlight ? 'border-purple-400' : 'border-gray-200'}`}>
+        <div className="flex-shrink-0">
+          {iconSrc ? (
+            <Image src={iconSrc} alt={name + ' icon'} width={28} height={28} />
+          ) : (
+            <Wallet size={24} />
+          )}
+        </div>
+        <div className="flex-1">
+          <div className="flex items-center gap-2">
+            <span className="font-semibold text-gray-900">{name}</span>
+            {recommended && (
+              <span className="ml-1 bg-yellow-100 text-yellow-700 text-xs px-2 py-0.5 rounded font-medium">Recommended</span>
+            )}
+          </div>
+          {description && <div className="text-xs text-gray-500 mt-0.5">{description}</div>}
+        </div>
+        {detected ? (
+          <button
+            onClick={onConnect}
+            className="bg-primary-500 hover:bg-primary-600 text-white font-bold px-4 py-2 rounded-lg text-sm"
+          >
+            Connect Solana Wallet
+          </button>
+        ) : installUrl ? (
+          <a
+            href={installUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium px-4 py-2 rounded-lg text-sm"
+          >
+            Install
+          </a>
+        ) : (
+          <button
+            onClick={onConnect}
+            className="bg-primary-500 hover:bg-primary-600 text-white font-bold px-4 py-2 rounded-lg text-sm"
+          >
+            Connect
+          </button>
+        )}
+      </div>
+    );
+  }
 }
