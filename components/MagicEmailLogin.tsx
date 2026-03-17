@@ -1,4 +1,18 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+  useEffect(() => {
+    const checkExistingSession = async () => {
+      const magic = getMagic();
+      if (!magic) return;
+      const isLoggedIn = await magic.user.isLoggedIn();
+      if (isLoggedIn) {
+        const metadata = await magic.user.getMetadata();
+        if (metadata.publicAddress) {
+          onConnected(metadata.publicAddress);
+        }
+      }
+    };
+    checkExistingSession();
+  }, []);
 import { getMagic } from '../lib/magic';
 
 interface Props {

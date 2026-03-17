@@ -25,7 +25,10 @@ export default function WalletConnectModal({ isOpen, onClose }: WalletConnectMod
 
   // Placeholder: handle Magic email wallet connection
   const handleMagicConnected = (publicKey: string) => {
-    // TODO: Store publicKey in wallet state or context
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('magicWalletAddress', publicKey);
+    }
+    // TODO: Optionally update wallet state/context here
     onClose();
   };
 

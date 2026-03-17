@@ -59,11 +59,15 @@ export default function RequestPage() {
   }, [showContacts]);
 
   useEffect(() => {
-    if (!connected) {
-      setModalOpen(true);
-    } else {
-      setModalOpen(false);
-    }
+    const checkWallet = () => {
+      const magicWalletAddress = typeof window !== 'undefined' ? localStorage.getItem('magicWalletAddress') : null;
+      if (!connected && !magicWalletAddress) {
+        setModalOpen(true);
+      } else {
+        setModalOpen(false);
+      }
+    };
+    checkWallet();
   }, [connected]);
 
   const handleSendToChange = (raw: string, resolved: string) => {
