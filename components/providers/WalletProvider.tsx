@@ -6,7 +6,6 @@ import { WalletAdapterNetwork } from '@solana/wallet-adapter-base';
 import {
   PhantomWalletAdapter,
   SolflareWalletAdapter,
-  BackpackWalletAdapter,
 } from '@solana/wallet-adapter-wallets';
 import { TipLinkWalletAdapter } from '@tiplink/wallet-adapter';
 import { WalletModalProvider } from '@solana/wallet-adapter-react-ui';
@@ -25,10 +24,9 @@ export const SolvioWalletProvider: FC<Props> = ({ children }) => {
     () => [
       new PhantomWalletAdapter(),
       new SolflareWalletAdapter(),
-      new BackpackWalletAdapter(),
       new TipLinkWalletAdapter({
         title: 'Solvio',
-        clientId: 'your-tiplink-client-id',
+        clientId: 'solvio-app',
         theme: 'dark',
       }),
     ],
