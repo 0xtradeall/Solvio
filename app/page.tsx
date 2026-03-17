@@ -420,7 +420,31 @@ function LandingFooter() {
   );
 }
 
+import { useRouter } from 'next/navigation';
+import { getMagic } from '../lib/magic';
+
 export default function LandingPage() {
+  const router = useRouter();
+  useEffect(() => {
+    const checkAndRedirect = async () => {
+      const saved = typeof window !== 'undefined' ? localStorage.getItem('magicWalletAddress') : null;
+      if (saved) {
+        router.push('/request');
+        return;
+      }
+      const magic = getMagic();
+      if (!magic) return;
+      const isLoggedIn = await magic.user.isLoggedIn();
+      if (isLoggedIn) {
+        const metadata = await magic.user.getMetadata();
+        if (metadata.publicAddress) {
+          localStorage.setItem('magicWalletAddress', metadata.publicAddress);
+          router.push('/request');
+        }
+      }
+    };
+    checkAndRedirect();
+  }, [router]);
   return (
     <div className="font-sans antialiased">
       <LandingNav />
