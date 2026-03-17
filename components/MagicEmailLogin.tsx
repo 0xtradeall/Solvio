@@ -24,7 +24,8 @@ export default function MagicEmailLogin({ onConnected }: Props) {
         onConnected(metadata.publicAddress);
       }
     } catch (err: any) {
-      setError('Login failed. Please try again.');
+      console.error('Magic login error:', err);
+      setError(err?.message || 'Login failed. Please try again.');
     } finally {
       setLoading(false);
     }
