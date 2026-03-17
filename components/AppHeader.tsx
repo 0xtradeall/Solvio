@@ -3,19 +3,21 @@
 import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useWallet } from '@solana/wallet-adapter-react';
+import { useWalletAddress } from './WalletAddressContext';
 import { useConnection } from '@solana/wallet-adapter-react';
 import { SolvioLogo } from './SolvioLogo';
 import { Copy, LogOut, Check, ChevronDown } from 'lucide-react';
 
-export default function AppHeader() {
   const { publicKey, connected, disconnect } = useWallet();
+  const { walletAddress, disconnectMagic } = useWalletAddress();
   const { connection } = useConnection();
   const [open, setOpen] = useState(false);
   const [copied, setCopied] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
-  const short = publicKey
-    ? `${publicKey.toBase58().slice(0, 4)}…${publicKey.toBase58().slice(-4)}`
+  const displayAddress = walletAddress || (publicKey ? publicKey.toBase58() : '');
+  const short = displayAddress
+    ? `${displayAddress.slice(0, 4)}…${displayAddress.slice(-4)}`
     : '';
 
   const rpc = connection?.rpcEndpoint ?? '';
@@ -34,14 +36,14 @@ export default function AppHeader() {
   }, [open]);
 
   const handleCopy = async () => {
-    if (!publicKey) return;
+    if (!displayAddress) return;
     try {
-      await navigator.clipboard.writeText(publicKey.toBase58());
+      await navigator.clipboard.writeText(displayAddress);
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     } catch {
       const textarea = document.createElement('textarea');
-      textarea.value = publicKey.toBase58();
+      textarea.value = displayAddress;
       document.body.appendChild(textarea);
       textarea.select();
       document.execCommand('copy');
@@ -51,8 +53,12 @@ export default function AppHeader() {
     }
   };
 
-  const handleDisconnect = () => {
-    disconnect();
+  const handleDisconnect = async () => {
+    if (walletAddress) {
+      await disconnectMagic();
+    } else {
+      disconnect();
+    }
     setOpen(false);
   };
 
@@ -75,7 +81,7 @@ export default function AppHeader() {
 
         {/* Wallet status badge */}
         <div className="flex items-center gap-2">
-          {connected && publicKey ? (
+          {displayAddress ? (
             <div className="relative" ref={dropdownRef}>
               <button
                 onClick={() => setOpen(o => !o)}
@@ -118,7 +124,7 @@ export default function AppHeader() {
                   {/* Full address row */}
                   <div className="px-4 py-2.5 bg-gray-50 border-b border-gray-100">
                     <p className="text-xs text-gray-400 mb-0.5">Connected wallet</p>
-                    <p className="text-xs font-mono text-gray-700 break-all">{publicKey.toBase58()}</p>
+                    <p className="text-xs font-mono text-gray-700 break-all">{displayAddress}</p>
                   </div>
                   <button
                     onClick={handleCopy}

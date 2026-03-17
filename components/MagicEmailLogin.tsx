@@ -1,11 +1,13 @@
 import { useState, useEffect } from 'react';
 import { getMagic } from '../lib/magic';
+import { useWalletAddress } from './WalletAddressContext';
 
 interface Props {
   onConnected: (publicKey: string) => void;
 }
 
 export default function MagicEmailLogin({ onConnected }: Props) {
+  const { setWalletAddress } = useWalletAddress();
   const [email, setEmail] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -19,6 +21,7 @@ export default function MagicEmailLogin({ onConnected }: Props) {
         if (isLoggedIn) {
           const metadata = await magic.user.getMetadata();
           if (metadata.publicAddress) {
+            setWalletAddress(metadata.publicAddress);
             onConnected(metadata.publicAddress);
           }
         }
@@ -27,7 +30,7 @@ export default function MagicEmailLogin({ onConnected }: Props) {
       }
     };
     checkExistingSession();
-  }, [onConnected]);
+  }, [onConnected, setWalletAddress]);
 
   const handleLogin = async () => {
     if (!email) return;
@@ -40,6 +43,7 @@ export default function MagicEmailLogin({ onConnected }: Props) {
       const metadata = await magic.user.getMetadata();
       if (metadata.publicAddress) {
         localStorage.setItem('magicWalletAddress', metadata.publicAddress);
+        setWalletAddress(metadata.publicAddress);
         onConnected(metadata.publicAddress);
       }
     } catch (err: any) {
