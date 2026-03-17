@@ -1,18 +1,4 @@
 import { useState, useEffect } from 'react';
-  useEffect(() => {
-    const checkExistingSession = async () => {
-      const magic = getMagic();
-      if (!magic) return;
-      const isLoggedIn = await magic.user.isLoggedIn();
-      if (isLoggedIn) {
-        const metadata = await magic.user.getMetadata();
-        if (metadata.publicAddress) {
-          onConnected(metadata.publicAddress);
-        }
-      }
-    };
-    checkExistingSession();
-  }, []);
 import { getMagic } from '../lib/magic';
 
 interface Props {
@@ -24,6 +10,25 @@ export default function MagicEmailLogin({ onConnected }: Props) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
+  useEffect(() => {
+    const checkExistingSession = async () => {
+      try {
+        const magic = getMagic();
+        if (!magic) return;
+        const isLoggedIn = await magic.user.isLoggedIn();
+        if (isLoggedIn) {
+          const metadata = await magic.user.getMetadata();
+          if (metadata.publicAddress) {
+            onConnected(metadata.publicAddress);
+          }
+        }
+      } catch (err) {
+        console.error('Session check failed:', err);
+      }
+    };
+    checkExistingSession();
+  }, [onConnected]);
+
   const handleLogin = async () => {
     if (!email) return;
     setLoading(true);
@@ -32,9 +37,9 @@ export default function MagicEmailLogin({ onConnected }: Props) {
       const magic = getMagic();
       if (!magic) throw new Error('Magic not initialized');
       await magic.auth.loginWithMagicLink({ email });
-      // Access solana extension via magic.solana if needed
       const metadata = await magic.user.getMetadata();
       if (metadata.publicAddress) {
+        localStorage.setItem('magicWalletAddress', metadata.publicAddress);
         onConnected(metadata.publicAddress);
       }
     } catch (err: any) {
