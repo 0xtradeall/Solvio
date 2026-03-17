@@ -18,6 +18,7 @@ export default function MagicEmailLogin({ onConnected }: Props) {
       const magic = getMagic();
       if (!magic) throw new Error('Magic not initialized');
       await magic.auth.loginWithMagicLink({ email });
+      // Access solana extension via magic.solana if needed
       const metadata = await magic.user.getMetadata();
       if (metadata.publicAddress) {
         onConnected(metadata.publicAddress);

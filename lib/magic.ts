@@ -1,19 +1,21 @@
-import { Magic } from 'magic-sdk';
+import { Magic as MagicBase } from 'magic-sdk';
 import { SolanaExtension } from '@magic-ext/solana';
 import { clusterApiUrl } from '@solana/web3.js';
 
-let magic: Magic | null = null;
+type MagicWithSolana = InstanceType<typeof MagicBase> & { solana: SolanaExtension; };
 
-export const getMagic = () => {
+let magic: MagicWithSolana | null = null;
+
+export const getMagic = (): MagicWithSolana | null => {
   if (typeof window === 'undefined') return null;
   if (!magic) {
-    magic = new Magic(process.env.NEXT_PUBLIC_MAGIC_PUBLISHABLE_KEY!, {
+    magic = new MagicBase(process.env.NEXT_PUBLIC_MAGIC_PUBLISHABLE_KEY!, {
       extensions: {
         solana: new SolanaExtension({
           rpcUrl: clusterApiUrl('devnet'),
         }),
       },
-    });
+    }) as unknown as MagicWithSolana;
   }
   return magic;
 };
