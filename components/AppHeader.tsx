@@ -8,6 +8,7 @@ import { useConnection } from '@solana/wallet-adapter-react';
 import { SolvioLogo } from './SolvioLogo';
 import { Copy, LogOut, Check, ChevronDown } from 'lucide-react';
 
+export default function AppHeader() {
   const { publicKey, connected, disconnect } = useWallet();
   const { walletAddress, disconnectMagic } = useWalletAddress();
   const { connection } = useConnection();
