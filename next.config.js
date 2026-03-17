@@ -35,6 +35,7 @@ const nextConfig = {
     NEXT_PUBLIC_MAGIC_API_KEY: 'pk_test_demo',
   },
   webpack: (config, { isServer, webpack }) => {
+    config.resolve.fallback = { buffer: require.resolve('buffer/') };
     config.resolve.alias = {
       ...config.resolve.alias,
       'buffer/': path.resolve(__dirname, 'node_modules/buffer/'),

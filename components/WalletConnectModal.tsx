@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import MagicEmailLogin from './MagicEmailLogin';
 import { useRouter } from 'next/navigation';
 import { useWalletModal } from '@solana/wallet-adapter-react-ui';
 import { Mail, Wallet } from 'lucide-react';
@@ -21,8 +22,11 @@ export default function WalletConnectModal({ isOpen, onClose }: WalletConnectMod
     onClose();
   };
 
-  const handleOpenTipLink = () => {
-    window.open('https://tiplink.io', '_blank');
+
+  // Placeholder: handle Magic email wallet connection
+  const handleMagicConnected = (publicKey: string) => {
+    // TODO: Store publicKey in wallet state or context
+    onClose();
   };
 
   if (!isOpen) return null;
@@ -53,12 +57,6 @@ export default function WalletConnectModal({ isOpen, onClose }: WalletConnectMod
 
         {activeTab === 'wallet' && (
           <>
-            {/* Helper message for TipLink users */}
-            <div className="mb-3">
-              <div className="bg-purple-50 border border-purple-200 text-purple-700 rounded-lg px-3 py-2 text-xs text-center">
-                Just created a TipLink wallet? <b>Click TipLink below to connect it.</b>
-              </div>
-            </div>
             <div className="space-y-3">
               {/* Phantom Wallet */}
               <WalletOption
@@ -67,14 +65,6 @@ export default function WalletConnectModal({ isOpen, onClose }: WalletConnectMod
                 onConnect={handleWalletConnect}
                 installUrl="https://phantom.app"
                 recommended
-              />
-              {/* TipLink Wallet */}
-              <WalletOption
-                name="TipLink"
-                iconSrc="/tiplink-icon.png"
-                onConnect={handleWalletConnect}
-                description="Connect your TipLink wallet"
-                highlight
               />
               {/* Solflare Wallet */}
               <WalletOption
@@ -96,20 +86,12 @@ export default function WalletConnectModal({ isOpen, onClose }: WalletConnectMod
 
         {activeTab === 'email' && (
           <div className="space-y-4">
-            <p className="text-sm text-gray-600 text-center">
-              We're redirecting you to TipLink — a free Solana wallet you can create with just your email. Once created, come back and connect using the 'I have a wallet' tab.
-            </p>
-            <button
-              onClick={handleOpenTipLink}
-              className="w-full bg-primary-500 hover:bg-primary-600 text-white font-bold py-3 px-4 rounded-xl transition-all"
-            >
-              Open TipLink →
-            </button>
+            <MagicEmailLogin onConnected={handleMagicConnected} />
             <button
               onClick={() => setActiveTab('wallet')}
               className="w-full bg-gray-100 hover:bg-gray-200 text-gray-600 font-medium py-3 px-4 rounded-xl transition-all"
             >
-              I already have TipLink, connect now
+              Back to wallet options
             </button>
           </div>
         )}
