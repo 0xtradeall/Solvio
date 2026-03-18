@@ -9,7 +9,6 @@ import Image from 'next/image';
 import { WalletReadyState } from '@solana/wallet-adapter-base';
 import { PhantomWalletAdapter } from '@solana/wallet-adapter-wallets';
 import { SolflareWalletAdapter } from '@solana/wallet-adapter-wallets';
-import { BackpackWalletAdapter } from '@solana/wallet-adapter-wallets';
 
 interface WalletConnectModalProps {
   isOpen: boolean;
@@ -80,13 +79,6 @@ export default function WalletConnectModal({ isOpen, onClose }: WalletConnectMod
                 onConnect={handleWalletConnect}
                 installUrl="https://solflare.com"
               />
-              {/* Backpack Wallet */}
-              <WalletOption
-                name="Backpack"
-                iconSrc="/backpack-icon.png"
-                onConnect={handleWalletConnect}
-                installUrl="https://backpack.app"
-              />
             </div>
           </>
         )}
@@ -123,9 +115,6 @@ export default function WalletConnectModal({ isOpen, onClose }: WalletConnectMod
       readyState = adapter.readyState;
     } else if (name === 'Solflare') {
       const adapter = new SolflareWalletAdapter();
-      readyState = adapter.readyState;
-    } else if (name === 'Backpack') {
-      const adapter = new BackpackWalletAdapter();
       readyState = adapter.readyState;
     }
 
