@@ -67,7 +67,7 @@ export default function WalletConnectModal({ isOpen, onClose }: WalletConnectMod
               {/* Phantom Wallet */}
               <WalletOption
                 name="Phantom"
-                iconSrc="/phantom-icon.png"
+                iconSrc={new PhantomWalletAdapter().icon}
                 onConnect={handleWalletConnect}
                 installUrl="https://phantom.app"
                 recommended
@@ -75,7 +75,7 @@ export default function WalletConnectModal({ isOpen, onClose }: WalletConnectMod
               {/* Solflare Wallet */}
               <WalletOption
                 name="Solflare"
-                iconSrc="/solflare-icon.png"
+                iconSrc={new SolflareWalletAdapter().icon}
                 onConnect={handleWalletConnect}
                 installUrl="https://solflare.com"
               />
@@ -123,7 +123,7 @@ export default function WalletConnectModal({ isOpen, onClose }: WalletConnectMod
       <div className={`flex items-center gap-3 border rounded-xl px-4 py-3 ${highlight ? 'border-purple-400' : 'border-gray-200'}`}>
         <div className="flex-shrink-0">
           {iconSrc ? (
-            <Image src={iconSrc} alt={name + ' icon'} width={28} height={28} />
+            <img src={iconSrc} alt={name} className="w-8 h-8 rounded-full" />
           ) : (
             <Wallet size={24} />
           )}
