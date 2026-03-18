@@ -182,6 +182,7 @@ function PayPageContent() {
   const [pdfLoading, setPdfLoading] = useState(false);
   const [wrongNetwork, setWrongNetwork] = useState(false);
   const [isBlocked, setIsBlocked] = useState(false);
+  const [polling, setPolling] = useState<NodeJS.Timeout | null>(null);
 
 
   // Parse all params from both searchParams and window.location for robustness
@@ -230,16 +231,45 @@ function PayPageContent() {
     }
   }, [connected, publicKey, isPersonalised, recipient]);
 
+  // Robust network check using getGenesisHash
   useEffect(() => {
-    if (connected && publicKey) {
-      const rpc = connection.rpcEndpoint;
-      const isDevnet = rpc.includes('devnet');
-      if (!isDevnet) setWrongNetwork(true);
+    let cancelled = false;
+    async function checkNetwork() {
+      if (connected && publicKey) {
+        try {
+          const genesisHash = await connection.getGenesisHash();
+          if (genesisHash !== 'EtWTRABZaYq6iMfeYKouRu166VU2xqa1wcaWoxPkrZBG' && !cancelled) {
+            setWrongNetwork(true);
+          } else if (!cancelled) {
+            setWrongNetwork(false);
+          }
+        } catch {
+          if (!cancelled) setWrongNetwork(true);
+        }
+      } else {
+        if (!cancelled) setWrongNetwork(false);
+      }
     }
+    checkNetwork();
+    return () => { cancelled = true; };
   }, [connected, publicKey, connection]);
 
   const handlePay = async () => {
     if (!publicKey) return;
+
+    // Check network before proceeding
+    try {
+      const genesisHash = await connection.getGenesisHash();
+      if (genesisHash !== 'EtWTRABZaYq6iMfeYKouRu166VU2xqa1wcaWoxPkrZBG') {
+        setWrongNetwork(true);
+        setTxError('Please switch your wallet to Solana Devnet to continue. In Phantom: Settings > Developer Settings > Change Network > Devnet.');
+        return;
+      }
+    } catch {
+      setWrongNetwork(true);
+      setTxError('Unable to verify network. Please try again.');
+      return;
+    }
 
     const urlParams = new URLSearchParams(window.location.search);
     const recipientParam = urlParams.get('recipient') || '';
@@ -273,6 +303,53 @@ function PayPageContent() {
     }
   };
 
+  // Poll for incoming payment if user is recipient
+  useEffect(() => {
+    if (!connected || !publicKey || !toAddress || !amount || txStatus === 'confirmed' || txStatus === 'failed') {
+      if (polling) {
+        clearInterval(polling);
+        setPolling(null);
+      }
+      return;
+    }
+    // Only poll if user is the recipient (i.e., not the sender)
+    if (publicKey.toBase58() === toAddress) {
+      const solanaWeb3 = require('@solana/web3.js');
+      const conn = new solanaWeb3.Connection(solanaWeb3.clusterApiUrl('devnet'));
+      const interval = setInterval(async () => {
+        try {
+          const sigs = await conn.getSignaturesForAddress(new solanaWeb3.PublicKey(toAddress), { limit: 10 });
+          for (const sig of sigs) {
+            if (sig.confirmationStatus === 'confirmed') {
+              const tx = await conn.getParsedTransaction(sig.signature, { commitment: 'confirmed' });
+              if (tx && tx.meta && tx.meta.postBalances && tx.meta.preBalances) {
+                const accountKeys = tx.transaction.message.accountKeys.map((k: any) => (typeof k === 'string' ? k : k.pubkey.toBase58 ? k.pubkey.toBase58() : k.pubkey));
+                const idx = accountKeys.findIndex((k: string) => k === toAddress);
+                if (idx >= 0) {
+                  const delta = (tx.meta.postBalances[idx] - tx.meta.preBalances[idx]) / 1e9;
+                  if (Math.abs(delta - amount) < 0.001) {
+                    setTxStatus('confirmed');
+                    setTxId(sig.signature);
+                    clearInterval(interval);
+                    setPolling(null);
+                    return;
+                  }
+                }
+              }
+            }
+          }
+        } catch (e) {
+          // ignore
+        }
+      }, 5000);
+      setPolling(interval);
+      return () => {
+        clearInterval(interval);
+        setPolling(null);
+      };
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [connected, publicKey, toAddress, amount, txStatus]);
   const handleDownloadPDF = async () => {
     if (!publicKey || !txId) return;
     setPdfLoading(true);
