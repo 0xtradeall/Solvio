@@ -11,18 +11,19 @@ import { clearReceipts, getReceipts } from '@/lib/storage';
 
 export default function SettingsPage() {
   const { publicKey, connected, disconnect } = useWallet();
+  const { walletAddress } = require('@/components/WalletAddressContext').useWalletAddress();
   const router = useRouter();
   const [modalOpen, setModalOpen] = useState(false);
   const [showClearConfirm, setShowClearConfirm] = useState(false);
   const [cleared, setCleared] = useState(false);
 
   useEffect(() => {
-    if (!connected) {
+    if (!connected && !walletAddress) {
       setModalOpen(true);
     } else {
       setModalOpen(false);
     }
-  }, [connected]);
+  }, [connected, walletAddress]);
 
   const handleClearReceipts = () => {
     if (publicKey) {
@@ -38,7 +39,7 @@ export default function SettingsPage() {
 
   return (
     <div className="p-4 space-y-5 pb-20">
-      {!connected ? (
+      {(!connected && !walletAddress) ? (
         <WalletConnectModal isOpen={modalOpen} onClose={() => { setModalOpen(false); router.push('/'); }} />
       ) : (
         <>

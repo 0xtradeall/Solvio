@@ -20,6 +20,7 @@ type PollStatus = 'idle' | 'polling' | 'received' | 'timeout';
 
 export default function RequestPage() {
   const { publicKey, connected } = useWallet();
+  const { walletAddress } = require('@/components/WalletAddressContext').useWalletAddress();
   const { connection } = useConnection();
   const router = useRouter();
   const [modalOpen, setModalOpen] = useState(false);
@@ -60,15 +61,14 @@ export default function RequestPage() {
 
   useEffect(() => {
     const checkWallet = () => {
-      const magicWalletAddress = typeof window !== 'undefined' ? localStorage.getItem('magicWalletAddress') : null;
-      if (!connected && !magicWalletAddress) {
+      if (!connected && !walletAddress) {
         setModalOpen(true);
       } else {
         setModalOpen(false);
       }
     };
     checkWallet();
-  }, [connected]);
+  }, [connected, walletAddress]);
 
   const handleSendToChange = (raw: string, resolved: string) => {
     setSendToInput(raw);
@@ -228,7 +228,7 @@ export default function RequestPage() {
         <p className="text-sm text-gray-500 mt-0.5">Create a shareable link or QR code</p>
       </div>
 
-      {!connected ? (
+      {(!connected && !walletAddress) ? (
         <WalletConnectModal isOpen={modalOpen} onClose={() => { setModalOpen(false); router.push('/'); }} />
       ) : (
         <>

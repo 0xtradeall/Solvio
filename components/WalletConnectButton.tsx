@@ -15,6 +15,7 @@ interface Props {
 export default function WalletConnectButton({ className = '', showAddress = false, onConnect, onDisconnect }: Props) {
   const { publicKey, connected, disconnect } = useWallet();
   const [modalOpen, setModalOpen] = useState(false);
+    const { walletAddress } = require('./WalletAddressContext').useWalletAddress();
 
   const handleConnect = () => {
     setModalOpen(true);
@@ -44,6 +45,24 @@ export default function WalletConnectButton({ className = '', showAddress = fals
       </div>
     );
   }
+  
+    if (walletAddress) {
+      const short = `${walletAddress.slice(0, 4)}...${walletAddress.slice(-4)}`;
+      return (
+        <div className={`flex items-center gap-2 ${className}`}>
+          {showAddress && (
+            <span className="text-sm text-secondary-500 font-mono">{short}</span>
+          )}
+          <button
+            onClick={handleDisconnect}
+            className="flex items-center gap-2 bg-gray-100 hover:bg-gray-200 text-gray-700 px-4 py-2 rounded-xl text-sm font-medium transition-colors min-h-[44px]"
+          >
+            <LogOut size={16} />
+            Disconnect
+          </button>
+        </div>
+      );
+    }
 
   return (
     <>

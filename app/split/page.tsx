@@ -48,6 +48,7 @@ const makeParticipant = (nickname = '', walletAddress = ''): ParticipantState =>
 function SplitPageContent() {
   const wallet = useWallet();
   const { publicKey, connected } = wallet;
+  const { walletAddress } = require('@/components/WalletAddressContext').useWalletAddress();
   const router = useRouter();
   const searchParams = useSearchParams();
   const [modalOpen, setModalOpen] = useState(false);
@@ -124,12 +125,12 @@ function SplitPageContent() {
   }, [publicKey]);
 
   useEffect(() => {
-    if (!connected) {
+    if (!connected && !walletAddress) {
       setModalOpen(true);
     } else {
       setModalOpen(false);
     }
-  }, [connected]);
+  }, [connected, walletAddress]);
 
   useEffect(() => {
     if (publicKey) {
@@ -680,7 +681,7 @@ function SplitPageContent() {
         </div>
       )}
 
-      {!connected ? (
+      {(!connected && !walletAddress) ? (
         <WalletConnectModal isOpen={modalOpen} onClose={() => { setModalOpen(false); router.push('/'); }} />
       ) : (
         <>

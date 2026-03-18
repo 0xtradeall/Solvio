@@ -82,7 +82,7 @@ export default function AppHeader() {
 
         {/* Wallet status badge */}
         <div className="flex items-center gap-2">
-          {displayAddress ? (
+          {(walletAddress || publicKey) ? (
             <div className="relative" ref={dropdownRef}>
               <button
                 onClick={() => setOpen(o => !o)}

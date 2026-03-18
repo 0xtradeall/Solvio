@@ -16,6 +16,7 @@ const emptyForm = { nickname: '', addressInput: '', resolvedAddress: '', snsName
 
 export default function ContactsPage() {
   const { publicKey, connected } = useWallet();
+  const { walletAddress } = require('@/components/WalletAddressContext').useWalletAddress();
   const router = useRouter();
   const [modalOpen, setModalOpen] = useState(false);
   const [contacts, setContacts] = useState<Contact[]>([]);
@@ -32,12 +33,12 @@ export default function ContactsPage() {
   }, [publicKey]);
 
   useEffect(() => {
-    if (!connected) {
+    if (!connected && !walletAddress) {
       setModalOpen(true);
     } else {
       setModalOpen(false);
     }
-  }, [connected]);
+  }, [connected, walletAddress]);
 
   const refresh = () => {
     if (publicKey) setContacts(getContacts(publicKey.toBase58()));

@@ -159,6 +159,7 @@ https://solvio.app
 
 export default function ReceiptsPage() {
   const { publicKey, connected } = useWallet();
+  const { walletAddress } = require('@/components/WalletAddressContext').useWalletAddress();
   const router = useRouter();
   const [modalOpen, setModalOpen] = useState(false);
   const [receipts, setReceipts] = useState<Receipt[]>([]);
@@ -173,12 +174,12 @@ export default function ReceiptsPage() {
   }, [publicKey]);
 
   useEffect(() => {
-    if (!connected) {
+    if (!connected && !walletAddress) {
       setModalOpen(true);
     } else {
       setModalOpen(false);
     }
-  }, [connected]);
+  }, [connected, walletAddress]);
 
   useEffect(() => {
     if (publicKey) {

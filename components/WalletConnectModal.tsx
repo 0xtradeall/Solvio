@@ -6,6 +6,10 @@ import { useRouter } from 'next/navigation';
 import { useWalletModal } from '@solana/wallet-adapter-react-ui';
 import { Mail, Wallet } from 'lucide-react';
 import Image from 'next/image';
+import { WalletReadyState } from '@solana/wallet-adapter-base';
+import { PhantomWalletAdapter } from '@solana/wallet-adapter-wallets';
+import { SolflareWalletAdapter } from '@solana/wallet-adapter-wallets';
+import { BackpackWalletAdapter } from '@solana/wallet-adapter-wallets';
 
 interface WalletConnectModalProps {
   isOpen: boolean;
@@ -113,8 +117,19 @@ export default function WalletConnectModal({ isOpen, onClose }: WalletConnectMod
 
   // WalletOption component (inline for simplicity)
   function WalletOption({ name, iconSrc, onConnect, installUrl, description, recommended, highlight }: any) {
-    // Simulate detection (in real app, check window object for wallet)
-    const detected = false;
+    let readyState: WalletReadyState | undefined;
+    if (name === 'Phantom') {
+      const adapter = new PhantomWalletAdapter();
+      readyState = adapter.readyState;
+    } else if (name === 'Solflare') {
+      const adapter = new SolflareWalletAdapter();
+      readyState = adapter.readyState;
+    } else if (name === 'Backpack') {
+      const adapter = new BackpackWalletAdapter();
+      readyState = adapter.readyState;
+    }
+
+    const detected = readyState === WalletReadyState.Installed || readyState === WalletReadyState.Loadable;
     return (
       <div className={`flex items-center gap-3 border rounded-xl px-4 py-3 ${highlight ? 'border-purple-400' : 'border-gray-200'}`}>
         <div className="flex-shrink-0">
@@ -136,28 +151,29 @@ export default function WalletConnectModal({ isOpen, onClose }: WalletConnectMod
         {detected ? (
           <button
             onClick={onConnect}
-            className="bg-primary-500 hover:bg-primary-600 text-white font-bold px-4 py-2 rounded-lg text-sm"
+            className="bg-purple-600 hover:bg-purple-700 text-white font-bold px-4 py-2 rounded-lg text-sm"
           >
-            Connect Solana Wallet
+            Connect
           </button>
         ) : installUrl ? (
           <a
             href={installUrl}
             target="_blank"
             rel="noopener noreferrer"
-            className="bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium px-4 py-2 rounded-lg text-sm"
+            className="bg-gray-400 hover:bg-gray-500 text-white font-medium px-4 py-2 rounded-lg text-sm"
           >
             Install
           </a>
         ) : (
           <button
             onClick={onConnect}
-            className="bg-primary-500 hover:bg-primary-600 text-white font-bold px-4 py-2 rounded-lg text-sm"
+            className="bg-purple-600 hover:bg-purple-700 text-white font-bold px-4 py-2 rounded-lg text-sm"
           >
             Connect
           </button>
         )}
       </div>
+    );
     );
   }
 }
