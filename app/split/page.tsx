@@ -49,6 +49,12 @@ function SplitPageContent() {
   const wallet = useWallet();
   const { publicKey, connected } = wallet;
   const { walletAddress } = require('@/components/WalletAddressContext').useWalletAddress();
+
+  // Get sender address from wallet adapter or magicWalletAddress
+  let senderAddress = publicKey?.toBase58();
+  if (!senderAddress && typeof window !== 'undefined') {
+    senderAddress = localStorage.getItem('magicWalletAddress') || '';
+  }
   const router = useRouter();
   const searchParams = useSearchParams();
   const [modalOpen, setModalOpen] = useState(false);
@@ -576,17 +582,20 @@ function SplitPageContent() {
   };
 
   const generateParticipantLink = (participant: ParticipantState, index: number): string => {
-    if (!publicKey) return '';
+    if (!senderAddress) return '';
     const baseUrl = typeof window !== 'undefined' ? window.location.origin : '';
-    return generateSplitUrl(
+    const link = generateSplitUrl(
       baseUrl,
       splitId,
       participant.walletAddress,
       getShare(index),
       currency,
       description,
-      publicKey.toBase58()
+      senderAddress
     );
+    // Debug log for generated split link
+    console.log('[Solvio] Generated split link:', link);
+    return link;
   };
 
   const copyLink = async (link: string) => {

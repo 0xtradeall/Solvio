@@ -183,19 +183,28 @@ function PayPageContent() {
   const [wrongNetwork, setWrongNetwork] = useState(false);
   const [isBlocked, setIsBlocked] = useState(false);
 
-  const amount = parseFloat(searchParams.get('amount') || '0');
-  const currency = (searchParams.get('currency') || 'SOL') as Currency;
-  const toAddress = searchParams.get('to') || '';
-  const note = searchParams.get('note') || '';
 
-  const recipient = (() => {
-    const fromHook = searchParams.get('recipient') || '';
+  // Parse all params from both searchParams and window.location for robustness
+  const getParam = (key: string) => {
+    let val = searchParams.get(key) || '';
     if (typeof window !== 'undefined') {
-      const fromWindow = new URLSearchParams(window.location.search).get('recipient') || '';
-      return fromWindow || fromHook;
+      const fromWindow = new URLSearchParams(window.location.search).get(key) || '';
+      if (fromWindow) val = fromWindow;
     }
-    return fromHook;
-  })();
+    return val;
+  };
+  const amount = parseFloat(getParam('amount') || '0');
+  const currency = (getParam('currency') || 'SOL') as Currency;
+  const toAddress = getParam('to') || '';
+  const note = getParam('note') || '';
+  const recipient = getParam('recipient') || '';
+
+  // Debug log for payment link parsing
+  useEffect(() => {
+    console.log('[Solvio] /pay page loaded');
+    console.log('[Solvio] Full URL:', typeof window !== 'undefined' ? window.location.href : '');
+    console.log('[Solvio] Parsed params:', { amount, currency, toAddress, note, recipient });
+  }, [amount, currency, toAddress, note, recipient]);
 
   const isValid = validateSolanaAddress(toAddress) && validateAmount(amount);
   const isPersonalised = !!recipient && validateSolanaAddress(recipient);

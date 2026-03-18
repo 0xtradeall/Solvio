@@ -34,7 +34,12 @@ export default function SettingsPage() {
     }
   };
 
-  const addr = publicKey?.toBase58();
+
+  // Prefer wallet adapter, fallback to magicWalletAddress from localStorage
+  let addr = publicKey?.toBase58();
+  if (!addr && typeof window !== 'undefined') {
+    addr = localStorage.getItem('magicWalletAddress') || undefined;
+  }
   const receiptCount = addr ? getReceipts(addr).length : 0;
 
   return (
@@ -57,7 +62,7 @@ export default function SettingsPage() {
           Wallet
         </div>
 
-        {connected && addr ? (
+        {addr ? (
           <>
             <div className="space-y-1">
               <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Connected Address</p>
@@ -84,7 +89,7 @@ export default function SettingsPage() {
           </>
         ) : (
           <div className="space-y-3">
-            <p className="text-sm text-gray-500">Connect Phantom wallet to use Solvio</p>
+            <p className="text-sm text-gray-500">Connect wallet to use Solvio</p>
             <WalletConnectButton />
           </div>
         )}
