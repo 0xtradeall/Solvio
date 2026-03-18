@@ -8,7 +8,28 @@ import WalletConnectButton from '@/components/WalletConnectButton';
 import WalletConnectModal from '@/components/WalletConnectModal';
 import DevnetBanner from '@/components/DevnetBanner';
 import SnsAddressInput from '@/components/SnsAddressInput';
-import { getContacts, saveContact, deleteContact } from '@/lib/storage';
+// Use global contacts key for all users
+const CONTACTS_KEY = 'solvio_contacts';
+
+function getContacts() {
+  if (typeof window === 'undefined') return [];
+  try {
+    return JSON.parse(localStorage.getItem(CONTACTS_KEY) || '[]');
+  } catch {
+    return [];
+  }
+}
+function saveContact(contact) {
+  const contacts = getContacts();
+  const idx = contacts.findIndex((c) => c.id === contact.id);
+  if (idx >= 0) contacts[idx] = contact;
+  else contacts.push(contact);
+  localStorage.setItem(CONTACTS_KEY, JSON.stringify(contacts));
+}
+function deleteContact(id) {
+  const contacts = getContacts().filter((c) => c.id !== id);
+  localStorage.setItem(CONTACTS_KEY, JSON.stringify(contacts));
+}
 import { validateSolanaAddress } from '@/lib/validators';
 import { Contact } from '@/types';
 
@@ -28,9 +49,8 @@ export default function ContactsPage() {
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
 
   useEffect(() => {
-    if (publicKey) setContacts(getContacts(publicKey.toBase58()));
-    else setContacts([]);
-  }, [publicKey]);
+    setContacts(getContacts());
+  }, []);
 
   useEffect(() => {
     if (!connected && !walletAddress) {
@@ -41,7 +61,7 @@ export default function ContactsPage() {
   }, [connected, walletAddress]);
 
   const refresh = () => {
-    if (publicKey) setContacts(getContacts(publicKey.toBase58()));
+    setContacts(getContacts());
   };
 
   const validate = () => {
@@ -59,8 +79,8 @@ export default function ContactsPage() {
   };
 
   const handleSave = () => {
-    if (!publicKey || !validate()) return;
-    const contact: Contact = {
+    if (!validate()) return;
+    const contact = {
       id: editingId ?? Date.now().toString(),
       nickname: form.nickname.trim(),
       address: form.resolvedAddress,
@@ -68,7 +88,7 @@ export default function ContactsPage() {
       note: form.note.trim() || undefined,
       createdAt: new Date().toISOString(),
     };
-    saveContact(publicKey.toBase58(), contact);
+    saveContact(contact);
     refresh();
     setShowForm(false);
     setEditingId(null);
@@ -92,8 +112,7 @@ export default function ContactsPage() {
   };
 
   const handleDelete = (id: string) => {
-    if (!publicKey) return;
-    deleteContact(publicKey.toBase58(), id);
+    deleteContact(id);
     setDeleteConfirm(null);
     refresh();
   };
@@ -121,10 +140,7 @@ export default function ContactsPage() {
         <p className="text-sm text-gray-500 mt-0.5">Saved Solana wallet addresses</p>
       </div>
 
-      {!connected ? (
-        <WalletConnectModal isOpen={modalOpen} onClose={() => { setModalOpen(false); router.push('/'); }} />
-      ) : (
-        <>
+      {/* Always show add form and contacts, even if not connected */}
           {saved && (
             <div className="bg-green-50 border border-green-200 rounded-xl px-4 py-3 flex items-center gap-2 text-green-700 font-medium text-sm">
               <Check size={16} /> Contact saved!

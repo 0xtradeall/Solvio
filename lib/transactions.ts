@@ -22,13 +22,14 @@ export function getTransactionExplorerUrl(signature: string): string {
   return `https://solscan.io/tx/${signature}?cluster=devnet`;
 }
 
+// toAddress is now the recipient, fromAddress is the sender
 export function generatePaymentUrl(
   baseUrl: string,
   amount: number,
   currency: Currency,
-  toAddress: string,
+  toAddress: string, // recipient
   note?: string,
-  recipientAddress?: string
+  fromAddress?: string // sender
 ): string {
   const params: Record<string, string> = {
     amount: amount.toString(),
@@ -36,7 +37,7 @@ export function generatePaymentUrl(
     to: toAddress,
   };
   if (note) params.note = note;
-  if (recipientAddress) params.recipient = recipientAddress;
+  if (fromAddress) params.from = fromAddress;
   return `${baseUrl}/pay?${new URLSearchParams(params).toString()}`;
 }
 
