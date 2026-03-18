@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+        <div>
 import { useWallet } from '@solana/wallet-adapter-react';
 import { useRouter } from 'next/navigation';
 import { Plus, Trash2, Edit3, X, Send, Users, Contact2, Check, AlertCircle } from 'lucide-react';
@@ -22,7 +22,7 @@ function getContacts() {
 function saveContact(contact) {
   const contacts = getContacts();
   const idx = contacts.findIndex((c) => c.id === contact.id);
-  if (idx >= 0) contacts[idx] = contact;
+        </div>
   else contacts.push(contact);
   localStorage.setItem(CONTACTS_KEY, JSON.stringify(contacts));
 }
