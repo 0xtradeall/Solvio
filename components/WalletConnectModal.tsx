@@ -174,6 +174,5 @@ export default function WalletConnectModal({ isOpen, onClose }: WalletConnectMod
         )}
       </div>
     );
-    );
   }
 }
