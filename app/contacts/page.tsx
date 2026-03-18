@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { UserPlus, Trash2, User } from 'lucide-react';
 
+
 const CONTACTS_KEY = 'solvio_contacts';
 
 interface Contact {
@@ -17,10 +18,16 @@ export default function ContactsPage() {
   const [name, setName] = useState('');
   const [address, setAddress] = useState('');
 
+
   useEffect(() => {
     try {
       const saved = JSON.parse(localStorage.getItem(CONTACTS_KEY) || '[]');
-      setContacts(saved);
+      // Defensive: filter to array of objects with id, name, address
+      if (Array.isArray(saved)) {
+        setContacts(saved.filter(c => c && typeof c.id === 'string' && typeof c.name === 'string' && typeof c.address === 'string'));
+      } else {
+        setContacts([]);
+      }
     } catch {
       setContacts([]);
     }

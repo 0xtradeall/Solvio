@@ -16,7 +16,7 @@ import { saveReceipt } from '@/lib/storage';
 import { generateReceiptPDF } from '@/lib/pdf';
 import { generateSplitUrl } from '@/lib/transactions';
 import { saveSplit, updateSplitParticipantStatus, getSplits, getActiveSplit, saveActiveSplit, clearActiveSplit, SplitData } from '@/lib/storage';
-import { getContacts } from '@/lib/storage';
+// Remove getContacts import, use localStorage directly for contacts
 import { Currency, TxStatus, Receipt, Contact } from '@/types';
 
 interface ParticipantState {
@@ -123,12 +123,18 @@ function SplitPageContent() {
   }, [searchParams]);
 
   useEffect(() => {
-    if (publicKey) {
-      setContacts(getContacts(publicKey.toBase58()));
-    } else {
+    // Always read from 'solvio_contacts' key, not wallet-specific
+    try {
+      const saved = JSON.parse(localStorage.getItem('solvio_contacts') || '[]');
+      if (Array.isArray(saved)) {
+        setContacts(saved.filter(c => c && typeof c.id === 'string' && typeof c.name === 'string' && typeof c.address === 'string'));
+      } else {
+        setContacts([]);
+      }
+    } catch {
       setContacts([]);
     }
-  }, [publicKey]);
+  }, []);
 
   useEffect(() => {
     if (!connected && !walletAddress) {

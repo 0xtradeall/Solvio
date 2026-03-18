@@ -12,7 +12,7 @@ import SnsAddressInput from '@/components/SnsAddressInput';
 import { generatePaymentUrl, pollForIncomingPayment, getTransactionExplorerUrl } from '@/lib/transactions';
 import { validateAmount } from '@/lib/validators';
 import { isSNSInput } from '@/lib/sns';
-import { saveReceipt, getContacts } from '@/lib/storage';
+import { saveReceipt } from '@/lib/storage';
 import { generateReceiptPDF } from '@/lib/pdf';
 import { Receipt, Currency, Contact } from '@/types';
 
@@ -42,11 +42,25 @@ export default function RequestPage() {
   const [contacts, setContacts] = useState<Contact[]>([]);
   const contactsDropdownRef = useRef<HTMLDivElement>(null);
 
-  const receiverAddress = publicKey?.toBase58() ?? '';
+  // Receiving wallet: prefer wallet adapter, fallback to magicWalletAddress
+  let receiverAddress = publicKey?.toBase58() ?? '';
+  if (!receiverAddress && typeof window !== 'undefined') {
+    receiverAddress = localStorage.getItem('magicWalletAddress') || '';
+  }
 
   useEffect(() => {
-    if (publicKey) setContacts(getContacts(publicKey.toBase58()));
-  }, [publicKey]);
+    // Always read from 'solvio_contacts' key, not wallet-specific
+    try {
+      const saved = JSON.parse(localStorage.getItem('solvio_contacts') || '[]');
+      if (Array.isArray(saved)) {
+        setContacts(saved.filter(c => c && typeof c.id === 'string' && typeof c.name === 'string' && typeof c.address === 'string'));
+      } else {
+        setContacts([]);
+      }
+    } catch {
+      setContacts([]);
+    }
+  }, []);
 
   useEffect(() => {
     if (!showContacts) return;
