@@ -173,7 +173,7 @@ function PayPageContent() {
   const searchParams = useSearchParams();
   const wallet = useWallet();
   const { connection } = useConnection();
-  const { publicKey, connected, disconnect } = wallet;
+  const { publicKey, connected, disconnect, signTransaction } = wallet;
   const hasPhantom = usePhantomDetection();
 
   const [txStatus, setTxStatus] = useState<'idle' | 'pending' | 'confirmed' | 'failed'>('idle');
@@ -183,6 +183,37 @@ function PayPageContent() {
   const [wrongNetwork, setWrongNetwork] = useState(false);
   const [isBlocked, setIsBlocked] = useState(false);
   const [polling, setPolling] = useState<NodeJS.Timeout | null>(null);
+  const [magicReady, setMagicReady] = useState(false);
+  const [checkingMagic, setCheckingMagic] = useState(true);
+
+  // Stricter wallet connection check: must have publicKey and signTransaction, or valid Magic session
+  useEffect(() => {
+    let cancelled = false;
+    async function checkMagic() {
+      setCheckingMagic(true);
+      try {
+        if (typeof window !== 'undefined') {
+          const { getMagic } = await import('@/lib/magic');
+          const magic = getMagic();
+          if (magic) {
+            const isLoggedIn = await magic.user.isLoggedIn();
+            if (!cancelled) setMagicReady(!!isLoggedIn);
+          } else {
+            if (!cancelled) setMagicReady(false);
+          }
+        }
+      } catch {
+        if (!cancelled) setMagicReady(false);
+      }
+      if (!cancelled) setCheckingMagic(false);
+    }
+    checkMagic();
+    return () => { cancelled = true; };
+  }, []);
+
+  const isWalletReady = !!publicKey && typeof signTransaction === 'function';
+  const isMagicReady = magicReady;
+  const readyToPay = isWalletReady || isMagicReady;
 
 
   // Parse all params from both searchParams and window.location for robustness
@@ -414,11 +445,19 @@ function PayPageContent() {
           </div>
         </div>
 
-        {/* ── No wallet connected yet: show connect prompt ── */}
-        {!connected ? (
+        {/* ── Not ready: show connect prompt for both wallet and Magic ── */}
+        {!readyToPay ? (
           <div className="space-y-3">
             <p className="text-sm text-gray-500 text-center">Connect your wallet to make this payment</p>
             <WalletConnectButton />
+            <div className="flex items-center justify-center my-2 text-xs text-gray-400">or</div>
+            <button
+              onClick={() => window.open('/?magic=1', '_blank')}
+              className="w-full flex items-center justify-center gap-2 p-3 bg-primary-500 hover:bg-primary-600 text-white rounded-xl transition-colors font-bold"
+              disabled={checkingMagic}
+            >
+              <Mail size={18} /> Pay with Email
+            </button>
           </div>
 
         /* ── Wrong network ── */
@@ -476,6 +515,7 @@ function PayPageContent() {
             <button
               onClick={handlePay}
               className="w-full bg-primary-500 hover:bg-primary-600 active:scale-95 text-white font-bold py-4 rounded-2xl transition-all text-lg shadow-sm shadow-primary-200"
+              disabled={!readyToPay}
             >
               Pay {amount} {currency}
             </button>
