@@ -10,6 +10,10 @@ interface Contact {
   id: string;
   name: string;
   address: string;
+  nickname?: string;
+  snsName?: string;
+  note?: string;
+  createdAt?: string;
 }
 
 export default function ContactsPage() {
@@ -43,7 +47,8 @@ export default function ContactsPage() {
     const newContact: Contact = {
       id: Date.now().toString(),
       name: name.trim(),
-      address: address.trim()
+      address: address.trim(),
+      createdAt: new Date().toISOString(),
     };
     saveContacts([...contacts, newContact]);
     setName('');

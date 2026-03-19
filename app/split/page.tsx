@@ -356,15 +356,14 @@ function SplitPageContent() {
 
   const addSelectedContacts = () => {
     const selectedContactsList = contacts.filter(c => selectedContacts.has(c.id));
-    const newParticipants = selectedContactsList.map(c => makeParticipant(c.nickname, c.address));
-    
+    // Accept both legacy and new contact shapes
+    const newParticipants = selectedContactsList.map(c => makeParticipant(c.name || c.nickname, c.address));
     // Check if we would exceed the limit
     if (participants.length + newParticipants.length > 10) {
       // Add as many as possible
       const availableSlots = 10 - participants.length;
       newParticipants.splice(availableSlots);
     }
-    
     setParticipants(p => {
       // Filter out empty participants (those with no address and no nickname)
       const filteredExisting = p.filter(participant => 
@@ -376,11 +375,11 @@ function SplitPageContent() {
   };
 
   const filteredContacts = contacts.filter(c => 
-    c.nickname.toLowerCase().includes(contactsSearchQuery.toLowerCase()) ||
+    (c.name || c.nickname || '').toLowerCase().includes(contactsSearchQuery.toLowerCase()) ||
     c.address.toLowerCase().includes(contactsSearchQuery.toLowerCase())
   );
 
-  const isContactAlreadyAdded = (contact: Contact) => {
+  const isContactAlreadyAdded = (contact: any) => {
     return participants.some(p => p.walletAddress === contact.address);
   };
 

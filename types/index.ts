@@ -80,9 +80,11 @@ export interface TransactionStatus {
 
 export interface Contact {
   id: string;
-  nickname: string;
+  name: string;
   address: string;
+  // Optionally support legacy fields for migration
+  nickname?: string;
   snsName?: string;
   note?: string;
-  createdAt: string;
+  createdAt?: string;
 }

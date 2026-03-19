@@ -90,8 +90,9 @@ export default function RequestPage() {
     setSendToError('');
   };
 
-  const selectContact = (c: Contact) => {
-    setSendToInput(c.snsName || c.address);
+  const selectContact = (c: any) => {
+    // Accept both legacy and new contact shapes
+    setSendToInput(c.name || c.nickname || c.address);
     setResolvedSendTo(c.address);
     setSendToError('');
     setShowContacts(false);
@@ -290,10 +291,10 @@ export default function RequestPage() {
                               className="w-full flex items-center gap-3 px-3 py-2.5 hover:bg-primary-50 transition-colors text-left"
                             >
                               <div className="w-8 h-8 rounded-full bg-primary-100 flex items-center justify-center flex-shrink-0 text-primary-700 font-bold text-xs">
-                                {c.nickname.slice(0, 1).toUpperCase()}
+                                {(c.name || c.nickname || c.address).slice(0, 1).toUpperCase()}
                               </div>
                               <div className="min-w-0">
-                                <p className="text-sm font-semibold text-gray-900 truncate">{c.nickname}</p>
+                                <p className="text-sm font-semibold text-gray-900 truncate">{c.name || c.nickname || c.address}</p>
                                 <p className="text-xs font-mono text-gray-400 truncate">
                                   {c.snsName || `${c.address.slice(0, 8)}…${c.address.slice(-4)}`}
                                 </p>
