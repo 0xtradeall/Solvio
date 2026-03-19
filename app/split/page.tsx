@@ -504,9 +504,26 @@ function SplitPageContent() {
   };
 
   const sendAll = async () => {
-    if (!publicKey) return;
+    // Get sender address from wallet or magic wallet fallback
+    let senderAddress = publicKey?.toBase58();
+    if (!senderAddress && typeof window !== 'undefined') {
+      senderAddress = localStorage.getItem('magicWalletAddress') || '';
+    }
+    if (!senderAddress) {
+      alert('Wallet not connected');
+      return;
+    }
     setShowConfirmModal(false);
     if (!validateAll()) return;
+
+    // Check that each participant has a valid address
+    const invalidParticipants = participants.filter(
+      (p) => !p.walletAddress || !validateSolanaAddress(p.walletAddress)
+    );
+    if (invalidParticipants.length > 0) {
+      alert('One or more participants have missing or invalid addresses.');
+      return;
+    }
 
     setHasSentAll(true);
 
@@ -520,7 +537,7 @@ function SplitPageContent() {
 
     const splitData: SplitData = {
       id: splitId,
-      senderAddress: publicKey.toBase58(),
+      senderAddress,
       totalAmount: total,
       currency,
       description,
@@ -536,12 +553,16 @@ function SplitPageContent() {
     };
 
     setParticipants(results);
-    saveSplit(publicKey.toBase58(), splitData);
-    setCurrentSplit(splitData);
-    
-    // Save as active split
-    saveActiveSplit(publicKey.toBase58(), splitData);
-    setActiveSplit(splitData);
+    try {
+      saveSplit(senderAddress, splitData);
+      setCurrentSplit(splitData);
+      // Save as active split
+      saveActiveSplit(senderAddress, splitData);
+      setActiveSplit(splitData);
+    } catch (err) {
+      console.error('Failed to generate split links:', err);
+      alert('Failed to generate split links. See console for details.');
+    }
   };
 
   const retryOne = (index: number) => {
@@ -589,15 +610,7 @@ function SplitPageContent() {
   const generateParticipantLink = (participant: ParticipantState, index: number): string => {
     if (!senderAddress) return '';
     const baseUrl = typeof window !== 'undefined' ? window.location.origin : '';
-    const link = generateSplitUrl(
-      baseUrl,
-      splitId,
-      participant.walletAddress,
-      getShare(index),
-      currency,
-      description,
-      senderAddress
-    );
+    const link = generateSplitUrl(baseUrl, splitId, participant.walletAddress, getShare(index), currency, description, senderAddress);
     // Debug log for generated split link
     console.log('[Solvio] Generated split link:', link);
     return link;

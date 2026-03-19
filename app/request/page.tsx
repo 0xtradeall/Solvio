@@ -91,9 +91,9 @@ export default function RequestPage() {
   };
 
   const selectContact = (c: any) => {
-    // Accept both legacy and new contact shapes
-    setSendToInput(c.name || c.nickname || c.address);
-    setResolvedSendTo(c.address);
+    // Always insert the wallet address into the field
+    setSendToInput(c.address || '');
+    setResolvedSendTo(c.address || '');
     setSendToError('');
     setShowContacts(false);
   };
