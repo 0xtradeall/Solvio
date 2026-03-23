@@ -13,8 +13,50 @@ import { saveReceipt } from '@/lib/storage';
 import { generateReceiptPDF } from '@/lib/pdf';
 import { Receipt, Currency } from '@/types';
 
+
 const DEVNET_RPC = 'https://api.devnet.solana.com';
-const REQUIRED_NETWORK = 'devnet';
+const MAINNET_RPC = 'https://api.mainnet-beta.solana.com';
+const DEVNET_GENESIS_HASH = 'EtWTRABZaYq6iMfeYKouRu166VU2xqa1wcaWoxPkrZBG';
+const MAINNET_GENESIS_HASH = '5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp';
+
+async function detectWalletNetwork(): Promise<'devnet' | 'mainnet-beta' | 'testnet' | 'unknown'> {
+  try {
+    const provider = (window as any).solana;
+    if (provider && provider.isPhantom) {
+      // Try direct cluster/network detection
+      const network = provider.networkVersion || provider._network || provider.network || provider._cluster;
+      if (typeof network === 'string') {
+        if (network.includes('devnet')) return 'devnet';
+        if (network.includes('mainnet')) return 'mainnet-beta';
+        if (network.includes('testnet')) return 'testnet';
+      }
+      // Try to get the wallet's current RPC endpoint
+      let endpoint = provider.connection?.rpcEndpoint;
+      if (!endpoint && provider._rpcEndpoint) endpoint = provider._rpcEndpoint;
+      // Fallback: use the connection from wallet-adapter
+      if (!endpoint && typeof window !== 'undefined') {
+        // Try to find a global connection
+        const globalConn = (window as any).connection;
+        if (globalConn?.rpcEndpoint) endpoint = globalConn.rpcEndpoint;
+      }
+      // Compare genesis hashes
+      const solanaWeb3 = await import('@solana/web3.js');
+      const devnetConn = new solanaWeb3.Connection(DEVNET_RPC);
+      const mainnetConn = new solanaWeb3.Connection(MAINNET_RPC);
+      const devnetHash = await devnetConn.getGenesisHash();
+      const mainnetHash = await mainnetConn.getGenesisHash();
+      if (endpoint) {
+        const walletConn = new solanaWeb3.Connection(endpoint);
+        const walletHash = await walletConn.getGenesisHash();
+        if (walletHash === devnetHash) return 'devnet';
+        if (walletHash === mainnetHash) return 'mainnet-beta';
+      }
+    }
+  } catch (e) {
+    // ignore
+  }
+  return 'unknown';
+}
 
 function usePhantomDetection() {
   const [hasPhantom, setHasPhantom] = useState<boolean | null>(null);
@@ -280,17 +322,15 @@ function PayPageContent() {
   const handlePay = async () => {
     if (!publicKey) return;
 
-    // Check network before proceeding
-    try {
-      const genesisHash = await connection.getGenesisHash();
-      if (genesisHash !== 'EtWTRABZaYq6iMfeYKouRu166VU2xqa1wcaWoxPkrZBG') {
-        setWrongNetwork(true);
-        setTxError('Please switch your wallet to Solana Devnet to continue. In Phantom: Settings > Developer Settings > Change Network > Devnet.');
-        return;
-      }
-    } catch {
+    // Robust network check before proceeding
+    const net = await detectWalletNetwork();
+    if (net !== 'devnet') {
       setWrongNetwork(true);
-      setTxError('Unable to verify network. Please try again.');
+      setTxError(
+        net === 'mainnet-beta'
+          ? 'Wrong network detected. Your wallet is on Solana Mainnet. Please switch to Devnet in Phantom settings: Settings → Developer Settings → Network → Devnet.'
+          : 'Unable to verify network. Please try again.'
+      );
       return;
     }
 
