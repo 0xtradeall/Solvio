@@ -14,52 +14,59 @@ import { generateReceiptPDF } from '@/lib/pdf';
 import { updateSplitParticipantStatus } from '@/lib/storage';
 import { Receipt, Currency } from '@/types';
 
-
-const DEVNET_RPC = 'https://api.devnet.solana.com';
-const MAINNET_RPC = 'https://api.mainnet-beta.solana.com';
-const DEVNET_GENESIS_HASH = 'EtWTRABZaYq6iMfeYKouRu166VU2xqa1wcaWoxPkrZBG';
-const MAINNET_GENESIS_HASH = '5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp';
-
-async function detectWalletNetwork(): Promise<'devnet' | 'mainnet-beta' | 'testnet' | 'unknown'> {
+async function detectWalletNetwork(publicKeyBase58: string): Promise<'devnet' | 'mainnet-beta' | 'unknown'> {
   try {
+    const solanaWeb3 = await import('@solana/web3.js');
+    const { Connection, PublicKey, clusterApiUrl } = solanaWeb3;
+    const devnetConn = new Connection(clusterApiUrl('devnet'), 'confirmed');
+    const mainnetConn = new Connection(clusterApiUrl('mainnet-beta'), 'confirmed');
+
+    const [devnetHash, mainnetHash] = await Promise.all([
+      devnetConn.getGenesisHash(),
+      mainnetConn.getGenesisHash(),
+    ]);
+
     const provider = (window as any).solana;
-    if (provider && provider.isPhantom) {
-      // Try direct cluster/network detection
-      const network = provider.networkVersion || provider._network || provider.network || provider._cluster;
-      if (typeof network === 'string') {
-        if (network.includes('devnet')) return 'devnet';
-        if (network.includes('mainnet')) return 'mainnet-beta';
-        if (network.includes('testnet')) return 'testnet';
-      }
-      // Try to get the wallet's current RPC endpoint
-      let endpoint = provider.connection?.rpcEndpoint;
-      if (!endpoint && provider._rpcEndpoint) endpoint = provider._rpcEndpoint;
-      // Fallback: use the connection from wallet-adapter
-      if (!endpoint && typeof window !== 'undefined') {
-        // Try to find a global connection
-        const globalConn = (window as any).connection;
-        if (globalConn?.rpcEndpoint) endpoint = globalConn.rpcEndpoint;
-      }
-      // Compare genesis hashes
-      const solanaWeb3 = await import('@solana/web3.js');
-      const devnetConn = new solanaWeb3.Connection(DEVNET_RPC);
-      const mainnetConn = new solanaWeb3.Connection(MAINNET_RPC);
-      const devnetHash = await devnetConn.getGenesisHash();
-      const mainnetHash = await mainnetConn.getGenesisHash();
-      if (endpoint) {
-        const walletConn = new solanaWeb3.Connection(endpoint);
+    const endpoint = provider?.connection?.rpcEndpoint || provider?._rpcEndpoint;
+    if (endpoint) {
+      try {
+        const walletConn = new Connection(endpoint, 'confirmed');
         const walletHash = await walletConn.getGenesisHash();
         if (walletHash === devnetHash) return 'devnet';
         if (walletHash === mainnetHash) return 'mainnet-beta';
+      } catch {
+        // Fall back to balance-based probe below.
       }
     }
+
+    const key = new PublicKey(publicKeyBase58);
+    const probe = async (conn: InstanceType<typeof Connection>) => {
+      try {
+        await conn.getBalance(key, 'confirmed');
+        return true;
+      } catch {
+        return false;
+      }
+    };
+
+    const [devnetOk, mainnetOk] = await Promise.all([probe(devnetConn), probe(mainnetConn)]);
+    if (devnetOk && !mainnetOk) return 'devnet';
+    if (mainnetOk && !devnetOk) return 'mainnet-beta';
   } catch (e) {
     // ignore
   }
   return 'unknown';
 }
 
-function NetworkWarning({ onDismiss, onManualRecheck }: { onDismiss: () => void, onManualRecheck: () => void }) {
+function NetworkWarning({
+  onDismiss,
+  onManualRecheck,
+  isChecking,
+}: {
+  onDismiss: () => void,
+  onManualRecheck: () => Promise<void>,
+  isChecking: boolean,
+}) {
   const [showManual, setShowManual] = useState(false);
   const [switching, setSwitching] = useState(false);
 
@@ -77,6 +84,10 @@ function NetworkWarning({ onDismiss, onManualRecheck }: { onDismiss: () => void,
       setShowManual(true);
     }
     setSwitching(false);
+  };
+
+  const handleManualRecheck = async () => {
+    await onManualRecheck();
   };
 
   return (
@@ -103,11 +114,12 @@ function NetworkWarning({ onDismiss, onManualRecheck }: { onDismiss: () => void,
           </div>
         )}
         <button
-          onClick={onManualRecheck}
+          onClick={handleManualRecheck}
+          disabled={isChecking}
           className="border border-primary-500 text-primary-700 hover:bg-primary-50 rounded-lg px-3 py-1 text-xs font-semibold mt-1"
           style={{ width: 'fit-content', alignSelf: 'center' }}
         >
-          I have switched — Re-check
+          {isChecking ? 'Checking...' : 'I have switched — Re-check'}
         </button>
       </div>
     </div>
@@ -126,6 +138,7 @@ function SplitPayPageContent() {
   const [pdfLoading, setPdfLoading] = useState(false);
   const [isBlocked, setIsBlocked] = useState(false);
   const [wrongNetwork, setWrongNetwork] = useState(false);
+  const [isCheckingNetwork, setIsCheckingNetwork] = useState(false);
 
   const splitId = searchParams.get('splitId') || '';
   const participant = searchParams.get('participant') || '';
@@ -150,11 +163,11 @@ function SplitPayPageContent() {
     }
   }, [connected, publicKey, participant]);
 
-  // Network check enforcement with event listeners and polling
-  const checkNetwork = async () => {
+  const checkNetwork = async (): Promise<void> => {
+    setIsCheckingNetwork(true);
     if (connected && publicKey) {
-      const net = await detectWalletNetwork();
-      if (net !== 'devnet') {
+      const net = await detectWalletNetwork(publicKey.toBase58());
+      if (net === 'mainnet-beta') {
         setWrongNetwork(true);
       } else {
         setWrongNetwork(false);
@@ -162,49 +175,22 @@ function SplitPayPageContent() {
     } else {
       setWrongNetwork(false);
     }
+    setIsCheckingNetwork(false);
   };
 
   useEffect(() => {
-    let cancelled = false;
-    checkNetwork();
-    const provider = (window as any).solana;
-    let interval: NodeJS.Timeout | null = null;
-    const handleNetworkChange = () => {
-      if (!cancelled) checkNetwork();
-    };
-    if (provider) {
-      provider.on?.('networkChanged', handleNetworkChange);
-      provider.on?.('accountChanged', handleNetworkChange);
-    }
-    // Poll every 3s if wrong network warning is visible
-    if (wrongNetwork) {
-      interval = setInterval(() => {
-        if (!cancelled) checkNetwork();
-      }, 3000);
-    }
-    return () => {
-      cancelled = true;
-      if (provider) {
-        provider.off?.('networkChanged', handleNetworkChange);
-        provider.off?.('accountChanged', handleNetworkChange);
-      }
-      if (interval) clearInterval(interval);
-    };
+    void checkNetwork();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [connected, publicKey, wrongNetwork]);
+  }, [connected, publicKey]);
 
   const handlePay = async () => {
     if (!publicKey || !sender) return;
 
     // Robust network check before proceeding
-    const net = await detectWalletNetwork();
-    if (net !== 'devnet') {
+    const net = await detectWalletNetwork(publicKey.toBase58());
+    if (net === 'mainnet-beta') {
       setWrongNetwork(true);
-      setTxError(
-        net === 'mainnet-beta'
-          ? 'Wrong network detected. Your wallet is on Solana Mainnet. Please switch to Devnet in Phantom settings: Settings → Developer Settings → Network → Devnet.'
-          : 'Unable to verify network. Please try again.'
-      );
+      setTxError('Wrong network detected. Your wallet is on Solana Mainnet. Please switch to Devnet in Phantom settings: Settings → Developer Settings → Network → Devnet.');
       return;
     }
 
@@ -303,7 +289,7 @@ function SplitPayPageContent() {
 
         /* ── Wrong network: BLOCK payment completely ── */
         ) : wrongNetwork ? (
-          <NetworkWarning onDismiss={() => setWrongNetwork(false)} onManualRecheck={checkNetwork} />
+          <NetworkWarning onDismiss={() => setWrongNetwork(false)} onManualRecheck={checkNetwork} isChecking={isCheckingNetwork} />
 
         /* ── Wrong wallet: BLOCK payment completely ── */
         ) : isBlocked ? (
