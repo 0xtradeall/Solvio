@@ -477,7 +477,7 @@ function PayPageContent() {
 
   return (
     <div className="min-h-screen bg-gray-50 pb-8">
-      {wrongNetwork && <NetworkWarning onDismiss={() => setWrongNetwork(false)} />}
+      {wrongNetwork && <NetworkWarning onDismiss={() => setWrongNetwork(false)} onManualRecheck={checkNetwork} />}
 
       <div className="p-4 space-y-5 max-w-md mx-auto">
         <div className="pt-4 text-center">
