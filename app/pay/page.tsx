@@ -482,13 +482,12 @@ function PayPageContent() {
                 className="flex items-center justify-center gap-2 bg-primary-500 hover:bg-primary-600 active:scale-95 text-white font-semibold py-3 rounded-xl transition-all text-sm"
               >
                 🔄 Switch Wallet
-              <button
-                onClick={handlePay}
-                className="w-full bg-primary-500 hover:bg-primary-600 active:scale-95 text-white font-bold py-4 rounded-2xl transition-all text-lg shadow-sm shadow-primary-200"
-                disabled={wrongNetwork}
-              >
-                Pay {amount} {currency}
               </button>
+              <Link
+                href="/"
+                className="flex items-center justify-center gap-2 bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold py-3 rounded-xl transition-colors text-sm"
+              >
+                <Home size={15} /> Go Home
               </Link>
             </div>
           </div>
