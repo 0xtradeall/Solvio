@@ -124,7 +124,7 @@ function NetworkWarning({ onDismiss }: { onDismiss: () => void }) {
     try {
       const phantom = (window as any).phantom?.solana || (window as any).solana;
       if (phantom?.request) {
-        await phantom.request({ method: 'switchNetwork', params: { network: REQUIRED_NETWORK } });
+        await phantom.request({ method: 'wallet_switchNetwork', params: { network: 'devnet' } });
         onDismiss();
       } else {
         setShowManual(true);
@@ -140,8 +140,8 @@ function NetworkWarning({ onDismiss }: { onDismiss: () => void }) {
       <div className="flex items-start gap-2">
         <AlertTriangle className="text-yellow-600 flex-shrink-0 mt-0.5" size={18} />
         <div>
-          <p className="font-bold text-yellow-800 text-sm">Wrong network detected</p>
-          <p className="text-xs text-yellow-700 mt-0.5">Solvio requires Solana <strong>Devnet</strong> for this transaction.</p>
+          <p className="font-bold text-yellow-800 text-sm">Your wallet is on the wrong network</p>
+          <p className="text-xs text-yellow-700 mt-0.5">Please switch to Solana <strong>Devnet</strong> to continue.</p>
         </div>
       </div>
       {!showManual ? (
@@ -150,19 +150,11 @@ function NetworkWarning({ onDismiss }: { onDismiss: () => void }) {
           disabled={switching}
           className="w-full flex items-center justify-center gap-2 bg-yellow-500 hover:bg-yellow-600 text-white font-semibold py-2.5 rounded-xl text-sm transition-colors"
         >
-          {switching ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />}
-          Switch to Devnet
+          {switching ? 'Switching…' : 'How to switch to Devnet'}
         </button>
       ) : (
         <div className="bg-yellow-100 rounded-xl p-3 space-y-1">
-          <p className="text-xs font-semibold text-yellow-800">Switch manually in Phantom:</p>
-          <ol className="text-xs text-yellow-700 space-y-0.5 list-decimal list-inside">
-            <li>Open Phantom wallet</li>
-            <li>Go to Settings → Developer Settings</li>
-            <li>Enable Testnet Mode</li>
-            <li>Select "Devnet"</li>
-            <li>Return here and refresh</li>
-          </ol>
+          <p className="text-xs font-semibold text-yellow-800">In Phantom: tap the network icon at the top → select Devnet.<br/>In Solflare: go to Settings → Network → Devnet.</p>
         </div>
       )}
     </div>
@@ -462,9 +454,7 @@ function PayPageContent() {
 
         /* ── Wrong network ── */
         ) : wrongNetwork ? (
-          <div className="bg-yellow-50 border border-yellow-200 rounded-2xl p-4 text-center">
-            <p className="text-yellow-800 font-semibold text-sm">Please switch to Devnet to continue</p>
-          </div>
+          <NetworkWarning onDismiss={() => setWrongNetwork(false)} />
 
         /* ── CASE 2 mismatch: BLOCK payment completely ── */
         ) : isBlocked ? (
@@ -492,12 +482,13 @@ function PayPageContent() {
                 className="flex items-center justify-center gap-2 bg-primary-500 hover:bg-primary-600 active:scale-95 text-white font-semibold py-3 rounded-xl transition-all text-sm"
               >
                 🔄 Switch Wallet
-              </button>
-              <Link
-                href="/"
-                className="flex items-center justify-center gap-2 bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold py-3 rounded-xl transition-colors text-sm"
+              <button
+                onClick={handlePay}
+                className="w-full bg-primary-500 hover:bg-primary-600 active:scale-95 text-white font-bold py-4 rounded-2xl transition-all text-lg shadow-sm shadow-primary-200"
+                disabled={wrongNetwork}
               >
-                <Home size={15} /> Go Home
+                Pay {amount} {currency}
+              </button>
               </Link>
             </div>
           </div>

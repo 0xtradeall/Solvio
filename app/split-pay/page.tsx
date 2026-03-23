@@ -14,6 +14,55 @@ import { generateReceiptPDF } from '@/lib/pdf';
 import { updateSplitParticipantStatus } from '@/lib/storage';
 import { Receipt, Currency } from '@/types';
 
+const DEVNET_GENESIS_HASH = 'EtWTRABZaYq6iMfeYKouRu166VU2xqa1wcaWoxPkrZBG';
+
+function NetworkWarning({ onDismiss }: { onDismiss: () => void }) {
+  const [showManual, setShowManual] = useState(false);
+  const [switching, setSwitching] = useState(false);
+
+  const handleSwitch = async () => {
+    setSwitching(true);
+    try {
+      const phantom = (window as any).phantom?.solana || (window as any).solana;
+      if (phantom?.request) {
+        // Try Phantom's network switch API
+        await phantom.request({ method: 'wallet_switchNetwork', params: { network: 'devnet' } });
+        onDismiss();
+      } else {
+        setShowManual(true);
+      }
+    } catch {
+      setShowManual(true);
+    }
+    setSwitching(false);
+  };
+
+  return (
+    <div className="bg-yellow-50 border-2 border-yellow-300 rounded-2xl p-4 space-y-3 mx-4 mt-4">
+      <div className="flex items-start gap-2">
+        <span className="text-yellow-600 flex-shrink-0 mt-0.5">⚠️</span>
+        <div>
+          <p className="font-bold text-yellow-800 text-sm">Your wallet is on the wrong network</p>
+          <p className="text-xs text-yellow-700 mt-0.5">Please switch to Solana <strong>Devnet</strong> to continue.</p>
+        </div>
+      </div>
+      {!showManual ? (
+        <button
+          onClick={handleSwitch}
+          disabled={switching}
+          className="w-full flex items-center justify-center gap-2 bg-yellow-500 hover:bg-yellow-600 text-white font-semibold py-2.5 rounded-xl text-sm transition-colors"
+        >
+          {switching ? 'Switching…' : 'How to switch to Devnet'}
+        </button>
+      ) : (
+        <div className="bg-yellow-100 rounded-xl p-3 space-y-1">
+          <p className="text-xs font-semibold text-yellow-800">In Phantom: tap the network icon at the top → select Devnet.<br/>In Solflare: go to Settings → Network → Devnet.</p>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function SplitPayPageContent() {
   const searchParams = useSearchParams();
   const wallet = useWallet();
@@ -25,6 +74,7 @@ function SplitPayPageContent() {
   const [txError, setTxError] = useState<string | null>(null);
   const [pdfLoading, setPdfLoading] = useState(false);
   const [isBlocked, setIsBlocked] = useState(false);
+  const [wrongNetwork, setWrongNetwork] = useState(false);
 
   const splitId = searchParams.get('splitId') || '';
   const participant = searchParams.get('participant') || '';
@@ -35,14 +85,10 @@ function SplitPayPageContent() {
 
   const isValid = validateSolanaAddress(participant) && validateAmount(amount) && splitId && sender;
 
+  // Wallet match enforcement
   useEffect(() => {
     if (connected && publicKey && participant) {
       const connectedAddr = publicKey.toBase58();
-      console.log('[Solvio] /split-pay enforcement check');
-      console.log('[Solvio] Connected wallet:', connectedAddr);
-      console.log('[Solvio] Participant param:', participant);
-      console.log('[Solvio] Match:', connectedAddr === participant);
-
       if (participant && connectedAddr !== participant) {
         setIsBlocked(true);
       } else {
@@ -53,8 +99,45 @@ function SplitPayPageContent() {
     }
   }, [connected, publicKey, participant]);
 
+  // Network check enforcement
+  useEffect(() => {
+    let cancelled = false;
+    async function checkNetwork() {
+      if (connected && publicKey) {
+        try {
+          const genesisHash = await connection.getGenesisHash();
+          if (genesisHash !== DEVNET_GENESIS_HASH && !cancelled) {
+            setWrongNetwork(true);
+          } else if (!cancelled) {
+            setWrongNetwork(false);
+          }
+        } catch {
+          if (!cancelled) setWrongNetwork(true);
+        }
+      } else {
+        if (!cancelled) setWrongNetwork(false);
+      }
+    }
+    checkNetwork();
+    return () => { cancelled = true; };
+  }, [connected, publicKey, connection]);
+
   const handlePay = async () => {
     if (!publicKey || !sender) return;
+
+    // Check network before proceeding
+    try {
+      const genesisHash = await connection.getGenesisHash();
+      if (genesisHash !== DEVNET_GENESIS_HASH) {
+        setWrongNetwork(true);
+        setTxError('Your wallet is on the wrong network. Please switch to Solana Devnet to continue.');
+        return;
+      }
+    } catch {
+      setWrongNetwork(true);
+      setTxError('Unable to verify network. Please try again.');
+      return;
+    }
 
     setTxError(null);
     const result = await sendPayment(
@@ -77,8 +160,6 @@ function SplitPayPageContent() {
         txId: result.signature,
       };
       saveReceipt(publicKey.toBase58(), receipt);
-
-      // Update split participant status
       updateSplitParticipantStatus(sender, splitId, participant, 'confirmed', result.signature);
     }
   };
@@ -151,6 +232,10 @@ function SplitPayPageContent() {
             <WalletConnectButton />
           </div>
 
+        /* ── Wrong network: BLOCK payment completely ── */
+        ) : wrongNetwork ? (
+          <NetworkWarning onDismiss={() => setWrongNetwork(false)} />
+
         /* ── Wrong wallet: BLOCK payment completely ── */
         ) : isBlocked ? (
           <div className="bg-red-50 border-2 border-red-200 rounded-2xl p-6 text-center space-y-4">
@@ -197,6 +282,7 @@ function SplitPayPageContent() {
             <button
               onClick={handlePay}
               className="w-full bg-primary-500 hover:bg-primary-600 active:scale-95 text-white font-bold py-4 rounded-2xl transition-all text-lg shadow-sm shadow-primary-200"
+              disabled={wrongNetwork}
             >
               Pay {amount} {currency}
             </button>
