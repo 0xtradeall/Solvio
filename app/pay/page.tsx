@@ -157,7 +157,7 @@ function NoWalletScreen() {
   );
 }
 
-function NetworkWarning({ onDismiss }: { onDismiss: () => void }) {
+function NetworkWarning({ onDismiss, onManualRecheck }: { onDismiss: () => void, onManualRecheck: () => void }) {
   const [showManual, setShowManual] = useState(false);
   const [switching, setSwitching] = useState(false);
 
@@ -186,19 +186,28 @@ function NetworkWarning({ onDismiss }: { onDismiss: () => void }) {
           <p className="text-xs text-yellow-700 mt-0.5">Please switch to Solana <strong>Devnet</strong> to continue.</p>
         </div>
       </div>
-      {!showManual ? (
+      <div className="flex flex-col gap-2">
+        {!showManual ? (
+          <button
+            onClick={handleSwitch}
+            disabled={switching}
+            className="w-full flex items-center justify-center gap-2 bg-yellow-500 hover:bg-yellow-600 text-white font-semibold py-2.5 rounded-xl text-sm transition-colors"
+          >
+            {switching ? 'Switching…' : 'How to switch to Devnet'}
+          </button>
+        ) : (
+          <div className="bg-yellow-100 rounded-xl p-3 space-y-1">
+            <p className="text-xs font-semibold text-yellow-800">In Phantom: tap the network icon at the top → select Devnet.<br/>In Solflare: go to Settings → Network → Devnet.</p>
+          </div>
+        )}
         <button
-          onClick={handleSwitch}
-          disabled={switching}
-          className="w-full flex items-center justify-center gap-2 bg-yellow-500 hover:bg-yellow-600 text-white font-semibold py-2.5 rounded-xl text-sm transition-colors"
+          onClick={onManualRecheck}
+          className="border border-primary-500 text-primary-700 hover:bg-primary-50 rounded-lg px-3 py-1 text-xs font-semibold mt-1"
+          style={{ width: 'fit-content', alignSelf: 'center' }}
         >
-          {switching ? 'Switching…' : 'How to switch to Devnet'}
+          I have switched — Re-check
         </button>
-      ) : (
-        <div className="bg-yellow-100 rounded-xl p-3 space-y-1">
-          <p className="text-xs font-semibold text-yellow-800">In Phantom: tap the network icon at the top → select Devnet.<br/>In Solflare: go to Settings → Network → Devnet.</p>
-        </div>
-      )}
+      </div>
     </div>
   );
 }
@@ -296,28 +305,48 @@ function PayPageContent() {
     }
   }, [connected, publicKey, isPersonalised, recipient]);
 
-  // Robust network check using getGenesisHash
+  // Robust network check with event listeners and polling
+  const checkNetwork = async () => {
+    if (connected && publicKey) {
+      const net = await detectWalletNetwork();
+      if (net !== 'devnet') {
+        setWrongNetwork(true);
+      } else {
+        setWrongNetwork(false);
+      }
+    } else {
+      setWrongNetwork(false);
+    }
+  };
+
   useEffect(() => {
     let cancelled = false;
-    async function checkNetwork() {
-      if (connected && publicKey) {
-        try {
-          const genesisHash = await connection.getGenesisHash();
-          if (genesisHash !== 'EtWTRABZaYq6iMfeYKouRu166VU2xqa1wcaWoxPkrZBG' && !cancelled) {
-            setWrongNetwork(true);
-          } else if (!cancelled) {
-            setWrongNetwork(false);
-          }
-        } catch {
-          if (!cancelled) setWrongNetwork(true);
-        }
-      } else {
-        if (!cancelled) setWrongNetwork(false);
-      }
-    }
     checkNetwork();
-    return () => { cancelled = true; };
-  }, [connected, publicKey, connection]);
+    const provider = (window as any).solana;
+    let interval: NodeJS.Timeout | null = null;
+    const handleNetworkChange = () => {
+      if (!cancelled) checkNetwork();
+    };
+    if (provider) {
+      provider.on?.('networkChanged', handleNetworkChange);
+      provider.on?.('accountChanged', handleNetworkChange);
+    }
+    // Poll every 3s if wrong network warning is visible
+    if (wrongNetwork) {
+      interval = setInterval(() => {
+        if (!cancelled) checkNetwork();
+      }, 3000);
+    }
+    return () => {
+      cancelled = true;
+      if (provider) {
+        provider.off?.('networkChanged', handleNetworkChange);
+        provider.off?.('accountChanged', handleNetworkChange);
+      }
+      if (interval) clearInterval(interval);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [connected, publicKey, wrongNetwork]);
 
   const handlePay = async () => {
     if (!publicKey) return;
@@ -494,7 +523,7 @@ function PayPageContent() {
 
         /* ── Wrong network ── */
         ) : wrongNetwork ? (
-          <NetworkWarning onDismiss={() => setWrongNetwork(false)} />
+          <NetworkWarning onDismiss={() => setWrongNetwork(false)} onManualRecheck={checkNetwork} />
 
         /* ── CASE 2 mismatch: BLOCK payment completely ── */
         ) : isBlocked ? (
