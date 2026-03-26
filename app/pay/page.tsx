@@ -357,6 +357,7 @@ function PayPageContent() {
     }
 
     setTxError(null);
+    console.log('[Solvio] Payment tx: sender =', publicKey.toBase58(), '| recipient (to) =', toAddress);
     const result = await sendPayment(
       connection, wallet, toAddress, amount, currency,
       (status) => {

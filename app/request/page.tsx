@@ -126,13 +126,8 @@ export default function RequestPage() {
     setIncomingTxId(null);
 
     const baseUrl = typeof window !== 'undefined' ? window.location.origin : '';
-    const recipient = resolvedSendTo || '';
-    if (!recipient) {
-      setSendToError('Recipient address required');
-      return;
-    }
     const url = generatePaymentUrl(
-      baseUrl, parseFloat(amount), currency, recipient, note, receiverAddress
+      baseUrl, parseFloat(amount), currency, receiverAddress, note, resolvedSendTo || undefined
     );
     console.log('[Solvio] Generated payment URL:', url);
     setPaymentUrl(url);

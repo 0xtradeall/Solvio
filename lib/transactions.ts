@@ -37,7 +37,7 @@ export function generatePaymentUrl(
     to: toAddress,
   };
   if (note) params.note = note;
-  if (fromAddress) params.from = fromAddress;
+  if (fromAddress) params.recipient = fromAddress;
   return `${baseUrl}/pay?${new URLSearchParams(params).toString()}`;
 }
 
