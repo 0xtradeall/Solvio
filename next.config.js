@@ -24,6 +24,10 @@ const nextConfig = {
             key: 'Access-Control-Allow-Headers',
             value: 'Content-Type, Authorization',
           },
+          {
+            key: 'Content-Security-Policy',
+            value: "default-src 'self'; script-src 'self' 'unsafe-eval' 'unsafe-inline'; connect-src 'self' https://*.supabase.co wss://*.supabase.co https://api.devnet.solana.com https://api.mainnet-beta.solana.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; frame-src 'self' https://auth.magic.link;",
+          },
         ],
       },
     ];
