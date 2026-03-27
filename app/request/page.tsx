@@ -15,6 +15,7 @@ import { isSNSInput } from '@/lib/sns';
 import { saveReceipt } from '@/lib/storage';
 import { generateReceiptPDF } from '@/lib/pdf';
 import { Receipt, Currency, Contact } from '@/types';
+import { APP_URL } from '@/lib/config';
 
 type PollStatus = 'idle' | 'polling' | 'received' | 'timeout';
 
@@ -125,7 +126,7 @@ export default function RequestPage() {
     setPollStatus('idle');
     setIncomingTxId(null);
 
-    const baseUrl = typeof window !== 'undefined' ? window.location.origin : '';
+    const baseUrl = APP_URL;
     const url = generatePaymentUrl(
       baseUrl, parseFloat(amount), currency, receiverAddress, note, resolvedSendTo || undefined
     );

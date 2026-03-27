@@ -17,6 +17,7 @@ import { generateReceiptPDF } from '@/lib/pdf';
 import { generateSplitUrl } from '@/lib/transactions';
 import { saveSplit, updateSplitParticipantStatus, getSplits, getActiveSplit, saveActiveSplit, clearActiveSplit, SplitData } from '@/lib/storage';
 import { saveSplitDB, subscribeToSplit, getSplitDB } from '@/lib/db';
+import { APP_URL } from '@/lib/config';
 // Remove getContacts import, use localStorage directly for contacts
 import { Currency, TxStatus, Receipt, Contact } from '@/types';
 
@@ -634,7 +635,7 @@ function SplitPageContent() {
 
   const generateParticipantLink = (participant: ParticipantState, index: number): string => {
     if (!senderAddress) return '';
-    const baseUrl = typeof window !== 'undefined' ? window.location.origin : '';
+    const baseUrl = APP_URL;
     const link = generateSplitUrl(baseUrl, splitId, participant.walletAddress, getShare(index), currency, description, senderAddress);
     // Debug log for generated split link
     console.log('[Solvio] Generated split link:', link);
