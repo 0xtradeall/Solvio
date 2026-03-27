@@ -94,7 +94,8 @@ export async function saveSplitDB(split: {
 }
 
 export async function updateParticipantStatusDB(
-  participantId: string,
+  splitId: string,
+  walletAddress: string,
   status: 'confirmed' | 'failed',
   txId?: string
 ) {
@@ -107,7 +108,8 @@ export async function updateParticipantStatusDB(
       tx_id: txId ?? null,
       paid_at: status === 'confirmed' ? new Date().toISOString() : null,
     })
-    .eq('id', participantId);
+    .eq('split_id', splitId)
+    .eq('wallet_address', walletAddress);
   if (error) console.error('[Solvio] updateParticipantStatusDB error:', error);
 }
 
