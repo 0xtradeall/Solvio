@@ -56,7 +56,7 @@ export async function saveSplitDB(split: {
   totalAmount: number;
   currency: 'SOL' | 'USDC';
   description: string;
-  equalSplit: boolean;
+  equalSplit?: boolean;
   participants: {
     id: string;
     walletAddress: string;
