@@ -217,7 +217,10 @@ function SplitPayPageContent() {
       };
       saveReceipt(publicKey.toBase58(), receipt);
       // Update Supabase first, localStorage as fallback
-      updateParticipantStatusDB(splitId, participant, 'confirmed', result.signature);
+      console.log('[Solvio] Attempting Supabase update:', { splitId, participant, status: 'confirmed', txId: result.signature });
+      updateParticipantStatusDB(splitId, participant, 'confirmed', result.signature)
+        .then(() => console.log('[Solvio] Supabase participant updated OK', splitId, participant))
+        .catch(e => console.error('[Solvio] Supabase update FAILED:', e));
       updateSplitParticipantStatus(sender, splitId, participant, 'confirmed', result.signature);
     }
   };
