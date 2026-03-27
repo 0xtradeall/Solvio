@@ -218,7 +218,8 @@ function SplitPageContent() {
   }, [splitId, hasSentAll, publicKey]);
 
   useEffect(() => {
-    if (!hasSentAll || !splitId) return;
+    console.log('[Solvio] subscribeToSplit useEffect fired, splitId:', splitId, 'hasSentAll:', hasSentAll);
+    if (!splitId) return;
 
     console.log('[Solvio] Subscribing to split:', splitId);
     const unsubscribe = subscribeToSplit(splitId, (participantId, status, txId) => {
