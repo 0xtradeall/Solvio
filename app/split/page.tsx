@@ -190,29 +190,23 @@ function SplitPageContent() {
   useEffect(() => {
     if (!splitId || !hasSentAll) return;
 
-    const unsubscribe = subscribeToSplit(splitId, (updatedParticipants) => {
+    const unsubscribe = subscribeToSplit(splitId, (walletAddress, status, txId) => {
+      let allConfirmed = false;
       setParticipants(prev => {
+        const idx = prev.findIndex(p => p.walletAddress === walletAddress);
+        if (idx === -1) return prev;
+        const current = prev[idx];
+        if (current.status === status && current.txId === (txId ?? undefined)) return prev;
         const next = [...prev];
-        let changed = false;
-
-        updatedParticipants.forEach(sp => {
-          const idx = next.findIndex(p => p.walletAddress === sp.walletAddress);
-          if (idx === -1) return;
-          if (next[idx].status !== sp.status || next[idx].txId !== sp.txId) {
-            next[idx] = {
-              ...next[idx],
-              status: sp.status,
-              txId: sp.txId,
-              paidAt: sp.status === 'confirmed' ? next[idx].paidAt || new Date().toISOString() : next[idx].paidAt,
-            };
-            changed = true;
-          }
-        });
-
-        return changed ? next : prev;
+        next[idx] = {
+          ...current,
+          status: status as TxStatus | 'idle',
+          txId: txId ?? undefined,
+          paidAt: status === 'confirmed' ? current.paidAt || new Date().toISOString() : current.paidAt,
+        };
+        allConfirmed = next.every(p => p.status === 'confirmed');
+        return next;
       });
-
-      const allConfirmed = updatedParticipants.every(p => p.status === 'confirmed');
       if (allConfirmed && publicKey) {
         clearActiveSplit(publicKey.toBase58());
         setActiveSplit(null);

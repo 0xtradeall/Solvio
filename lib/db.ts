@@ -145,7 +145,7 @@ export async function getActiveSplitDB(senderAddress: string) {
 
 export function subscribeToSplit(
   splitId: string,
-  onUpdate: (participantId: string, status: string, txId: string | null) => void
+  onUpdate: (walletAddress: string, status: string, txId: string | null) => void
 ) {
   const supabase = getSupabase();
   if (!supabase) return () => {};
@@ -160,8 +160,8 @@ export function subscribeToSplit(
         filter: `split_id=eq.${splitId}`,
       },
       (payload) => {
-        const { id, status, tx_id } = payload.new;
-        onUpdate(id, status, tx_id);
+        const { wallet_address, status, tx_id } = payload.new;
+        onUpdate(wallet_address, status, tx_id);
       }
     )
     .subscribe();
