@@ -147,27 +147,31 @@ export async function getActiveSplitDB(senderAddress: string) {
 
 export function subscribeToSplit(
   splitId: string,
-  onUpdate: (walletAddress: string, status: string, txId: string | null) => void
+  onUpdate: (participantId: string, status: string, txId: string | null) => void
 ) {
   const supabase = getSupabase();
   if (!supabase) return () => {};
+
   const channel = supabase
-    .channel(`split:${splitId}`)
+    .channel(`split-${splitId}`)
     .on(
       'postgres_changes',
       {
         event: 'UPDATE',
         schema: 'public',
         table: 'split_participants',
-        filter: `split_id=eq.${splitId}`,
       },
       (payload) => {
-        const { wallet_address, status, tx_id } = payload.new;
-        onUpdate(wallet_address, status, tx_id);
+        console.log('[Solvio] Realtime payload received:', payload.new);
+        const { id, split_id, status, tx_id } = payload.new as any;
+        // Filter client-side
+        if (split_id !== splitId) return;
+        onUpdate(id, status, tx_id);
       }
     )
     .subscribe((status) => {
       console.log('[Solvio] Supabase channel status:', status);
     });
+
   return () => supabase.removeChannel(channel);
 }
