@@ -166,6 +166,8 @@ export function subscribeToSplit(
         onUpdate(wallet_address, status, tx_id);
       }
     )
-    .subscribe();
+    .subscribe((status) => {
+      console.log('[Solvio] Supabase channel status:', status);
+    });
   return () => supabase.removeChannel(channel);
 }

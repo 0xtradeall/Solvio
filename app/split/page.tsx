@@ -220,7 +220,9 @@ function SplitPageContent() {
   useEffect(() => {
     if (!hasSentAll || !splitId) return;
 
+    console.log('[Solvio] Subscribing to split:', splitId);
     const unsubscribe = subscribeToSplit(splitId, (participantId, status, txId) => {
+      console.log('[Solvio] Realtime update received:', { participantId, status, txId });
       setParticipants(prev => {
         const next = [...prev];
         // participantId from Supabase is the row id like "participant-0-timestamp"
