@@ -217,7 +217,7 @@ function SplitPayPageContent() {
       };
       saveReceipt(publicKey.toBase58(), receipt);
       // Update Supabase first, localStorage as fallback
-      updateParticipantStatusDB(splitId, participant, 'confirmed', result.signature);
+      updateParticipantStatusDB(participant, 'confirmed', result.signature);
       updateSplitParticipantStatus(sender, splitId, participant, 'confirmed', result.signature);
     }
   };
