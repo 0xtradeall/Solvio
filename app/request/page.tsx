@@ -151,7 +151,7 @@ export default function RequestPage() {
     pollCancelRef.current = false;
     setPollStatus('polling');
 
-    const txId = await pollForIncomingPayment(connection, addr, amt, 120000);
+  const txId = await pollForIncomingPayment(connection, addr, amt, 120000, currency);
 
     if (pollCancelRef.current) return;
 
