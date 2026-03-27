@@ -1,4 +1,4 @@
-import { supabase } from './supabase';
+import { getSupabase } from './supabase';
 import { Receipt, SplitData } from '@/types';
 import { saveReceipt, getReceipts, saveSplit, saveActiveSplit, getActiveSplit } from './storage';
 
@@ -8,6 +8,7 @@ export async function saveReceiptDB(walletAddress: string, receipt: Receipt): Pr
   // localStorage always written first as fallback
   saveReceipt(walletAddress, receipt);
   try {
+    const supabase = getSupabase(); if (!supabase) return;
     await supabase.from('receipts').upsert({
       id: receipt.id,
       wallet_address: walletAddress,
@@ -27,6 +28,7 @@ export async function saveReceiptDB(walletAddress: string, receipt: Receipt): Pr
 
 export async function getReceiptsDB(walletAddress: string): Promise<Receipt[]> {
   try {
+    const supabase = getSupabase(); if (!supabase) return getReceipts(walletAddress);
     const { data, error } = await supabase
       .from('receipts')
       .select('*')
@@ -61,6 +63,7 @@ export async function saveSplitDB(split: SplitData): Promise<void> {
   saveSplit(split.senderAddress, split);
   saveActiveSplit(split.senderAddress, split);
   try {
+    const supabase = getSupabase(); if (!supabase) return;
     await supabase.from('splits').upsert({
       id: split.id,
       sender_address: split.senderAddress,
@@ -96,6 +99,7 @@ export async function updateParticipantStatusDB(
   txId?: string
 ): Promise<void> {
   try {
+    const supabase = getSupabase(); if (!supabase) return;
     await supabase
       .from('split_participants')
       .update({
@@ -112,6 +116,7 @@ export async function updateParticipantStatusDB(
 
 export async function getSplitDB(splitId: string): Promise<SplitData | null> {
   try {
+    const supabase = getSupabase(); if (!supabase) return null;
     const { data: splitRow, error: splitError } = await supabase
       .from('splits')
       .select('*')
@@ -153,6 +158,7 @@ export async function getSplitDB(splitId: string): Promise<SplitData | null> {
 
 export async function getActiveSplitDB(senderAddress: string): Promise<SplitData | null> {
   try {
+    const supabase = getSupabase(); if (!supabase) return getActiveSplit(senderAddress);
     const { data: splits, error } = await supabase
       .from('splits')
       .select('id')
@@ -179,6 +185,9 @@ export function subscribeToSplit(
   splitId: string,
   onUpdate: (participants: SplitData['participants']) => void
 ): () => void {
+  const supabase = getSupabase();
+  if (!supabase) return () => {};
+
   const channel = supabase
     .channel(`split-${splitId}`)
     .on(
