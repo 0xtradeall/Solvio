@@ -16,6 +16,7 @@ import { saveReceipt } from '@/lib/storage';
 import { generateReceiptPDF } from '@/lib/pdf';
 import { generateSplitUrl } from '@/lib/transactions';
 import { saveSplit, updateSplitParticipantStatus, getSplits, getActiveSplit, saveActiveSplit, clearActiveSplit, SplitData } from '@/lib/storage';
+import { saveSplitDB, subscribeToSplit } from '@/lib/db';
 // Remove getContacts import, use localStorage directly for contacts
 import { Currency, TxStatus, Receipt, Contact } from '@/types';
 
@@ -187,18 +188,14 @@ function SplitPageContent() {
   }, [equalSplit, totalAmount, participants.length]);
 
   useEffect(() => {
-    if (!publicKey || !splitId || !hasSentAll) return;
+    if (!splitId || !hasSentAll) return;
 
-    const interval = setInterval(() => {
-      const splits = getSplits(publicKey.toBase58());
-      const existingSplit = splits.find(s => s.id === splitId);
-      if (!existingSplit) return;
-
+    const unsubscribe = subscribeToSplit(splitId, (updatedParticipants) => {
       setParticipants(prev => {
         const next = [...prev];
         let changed = false;
 
-        existingSplit.participants.forEach(sp => {
+        updatedParticipants.forEach(sp => {
           const idx = next.findIndex(p => p.walletAddress === sp.walletAddress);
           if (idx === -1) return;
           if (next[idx].status !== sp.status || next[idx].txId !== sp.txId) {
@@ -215,21 +212,16 @@ function SplitPageContent() {
         return changed ? next : prev;
       });
 
-      // Update active split state if it matches
-      setActiveSplit(existingSplit);
-      saveActiveSplit(publicKey.toBase58(), existingSplit);
-
-      // Check if all participants are confirmed and clear active split
-      const allConfirmed = existingSplit.participants.every(p => p.status === 'confirmed');
-      if (allConfirmed) {
+      const allConfirmed = updatedParticipants.every(p => p.status === 'confirmed');
+      if (allConfirmed && publicKey) {
         clearActiveSplit(publicKey.toBase58());
         setActiveSplit(null);
         setShowActiveSplitBanner(false);
       }
-    }, 10000);
+    });
 
-    return () => clearInterval(interval);
-  }, [publicKey, splitId, hasSentAll]);
+    return unsubscribe;
+  }, [splitId, hasSentAll, publicKey]);
 
   const total = parseFloat(totalAmount) || 0;
   const perPerson = equalSplit && participants.length > 0 ? total / participants.length : 0;
@@ -554,10 +546,9 @@ function SplitPageContent() {
 
     setParticipants(results);
     try {
-      saveSplit(senderAddress, splitData);
+      // Save to Supabase (with localStorage fallback inside saveSplitDB)
+      await saveSplitDB(splitData);
       setCurrentSplit(splitData);
-      // Save as active split
-      saveActiveSplit(senderAddress, splitData);
       setActiveSplit(splitData);
     } catch (err) {
       console.error('Failed to generate split links:', err);

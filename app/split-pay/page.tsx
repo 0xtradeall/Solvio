@@ -12,6 +12,7 @@ import { validateSolanaAddress, validateAmount } from '@/lib/validators';
 import { saveReceipt } from '@/lib/storage';
 import { generateReceiptPDF } from '@/lib/pdf';
 import { updateSplitParticipantStatus } from '@/lib/storage';
+import { updateParticipantStatusDB } from '@/lib/db';
 import { Receipt, Currency } from '@/types';
 
 async function detectWalletNetwork(publicKeyBase58: string): Promise<'devnet' | 'mainnet-beta' | 'unknown'> {
@@ -215,6 +216,8 @@ function SplitPayPageContent() {
         txId: result.signature,
       };
       saveReceipt(publicKey.toBase58(), receipt);
+      // Update Supabase first, localStorage as fallback
+      updateParticipantStatusDB(splitId, participant, 'confirmed', result.signature);
       updateSplitParticipantStatus(sender, splitId, participant, 'confirmed', result.signature);
     }
   };

@@ -7,7 +7,7 @@ import { Download, Share2, FileText, ChevronDown, ChevronUp, ExternalLink, Loade
 import WalletConnectButton from '@/components/WalletConnectButton';
 import WalletConnectModal from '@/components/WalletConnectModal';
 import DevnetBanner from '@/components/DevnetBanner';
-import { getReceipts } from '@/lib/storage';
+import { getReceiptsDB } from '@/lib/db';
 import { generateReceiptPDF } from '@/lib/pdf';
 import { getTransactionExplorerUrl } from '@/lib/transactions';
 import { Receipt } from '@/types';
@@ -169,8 +169,8 @@ export default function ReceiptsPage() {
   const [activeSplits, setActiveSplits] = useState<SplitData[]>([]);
 
   useEffect(() => {
-    if (publicKey) setReceipts(getReceipts(publicKey.toBase58()));
-    else setReceipts([]);
+    if (!publicKey) { setReceipts([]); return; }
+    getReceiptsDB(publicKey.toBase58()).then(setReceipts);
   }, [publicKey]);
 
   useEffect(() => {
