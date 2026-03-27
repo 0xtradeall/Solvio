@@ -228,30 +228,67 @@ export async function sendSOLPayment(
 export async function pollForIncomingPayment(
   connection: Connection,
   toAddress: string,
-  amountSOL: number,
-  timeoutMs = 120000
+  amount: number,
+  timeoutMs = 120000,
+  currency: 'SOL' | 'USDC' = 'SOL'
 ): Promise<string | null> {
   const start = Date.now();
   const toPubkey = new PublicKey(toAddress);
 
   while (Date.now() - start < timeoutMs) {
     try {
-      const sigs = await connection.getSignaturesForAddress(toPubkey, { limit: 5 });
-      for (const sig of sigs) {
-        if (sig.blockTime && sig.blockTime * 1000 > start) {
-          const tx = await connection.getTransaction(sig.signature, {
-            commitment: 'confirmed',
-            maxSupportedTransactionVersion: 0,
-          });
-          if (tx) {
-            const accounts = tx.transaction.message.getAccountKeys ?
-              tx.transaction.message.getAccountKeys().staticAccountKeys :
-              (tx.transaction.message as any).accountKeys;
-            const toIdx = accounts?.findIndex((k: PublicKey) => k?.toBase58() === toAddress);
-            if (toIdx !== undefined && toIdx >= 0 && tx.meta?.postBalances && tx.meta?.preBalances) {
-              const delta = (tx.meta.postBalances[toIdx] - tx.meta.preBalances[toIdx]) / LAMPORTS_PER_SOL;
-              if (Math.abs(delta - amountSOL) < 0.001) {
+      if (currency === 'USDC') {
+        // For USDC: poll the receiver's ATA for recent transactions
+        const mintPubkey = new PublicKey(USDC_MINT_DEVNET);
+        let receiverATA: PublicKey;
+        try {
+          receiverATA = await getAssociatedTokenAddress(mintPubkey, toPubkey);
+        } catch {
+          await new Promise(r => setTimeout(r, 3000));
+          continue;
+        }
+        const sigs = await connection.getSignaturesForAddress(receiverATA, { limit: 5 });
+        for (const sig of sigs) {
+          if (sig.blockTime && sig.blockTime * 1000 > start) {
+            const tx = await connection.getParsedTransaction(sig.signature, {
+              commitment: 'confirmed',
+              maxSupportedTransactionVersion: 0,
+            });
+            if (!tx?.meta) continue;
+            // Check token balance changes on the receiver ATA
+            const postTokenBalances = tx.meta.postTokenBalances ?? [];
+            const preTokenBalances = tx.meta.preTokenBalances ?? [];
+            for (const post of postTokenBalances) {
+              if (post.mint !== USDC_MINT_DEVNET) continue;
+              const pre = preTokenBalances.find(p => p.accountIndex === post.accountIndex);
+              const postAmt = Number(post.uiTokenAmount.amount) / Math.pow(10, USDC_DECIMALS);
+              const preAmt = pre ? Number(pre.uiTokenAmount.amount) / Math.pow(10, USDC_DECIMALS) : 0;
+              const delta = postAmt - preAmt;
+              if (Math.abs(delta - amount) < 0.01) {
                 return sig.signature;
+              }
+            }
+          }
+        }
+      } else {
+        // SOL: existing logic
+        const sigs = await connection.getSignaturesForAddress(toPubkey, { limit: 5 });
+        for (const sig of sigs) {
+          if (sig.blockTime && sig.blockTime * 1000 > start) {
+            const tx = await connection.getTransaction(sig.signature, {
+              commitment: 'confirmed',
+              maxSupportedTransactionVersion: 0,
+            });
+            if (tx) {
+              const accounts = tx.transaction.message.getAccountKeys
+                ? tx.transaction.message.getAccountKeys().staticAccountKeys
+                : (tx.transaction.message as any).accountKeys;
+              const toIdx = accounts?.findIndex((k: PublicKey) => k?.toBase58() === toAddress);
+              if (toIdx !== undefined && toIdx >= 0 && tx.meta?.postBalances && tx.meta?.preBalances) {
+                const delta = (tx.meta.postBalances[toIdx] - tx.meta.preBalances[toIdx]) / LAMPORTS_PER_SOL;
+                if (Math.abs(delta - amount) < 0.001) {
+                  return sig.signature;
+                }
               }
             }
           }
