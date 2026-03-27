@@ -16,7 +16,7 @@ import { saveReceipt } from '@/lib/storage';
 import { generateReceiptPDF } from '@/lib/pdf';
 import { generateSplitUrl } from '@/lib/transactions';
 import { saveSplit, updateSplitParticipantStatus, getSplits, getActiveSplit, saveActiveSplit, clearActiveSplit, SplitData } from '@/lib/storage';
-import { saveSplitDB, subscribeToSplit } from '@/lib/db';
+import { saveSplitDB, subscribeToSplit, getSplitDB } from '@/lib/db';
 // Remove getContacts import, use localStorage directly for contacts
 import { Currency, TxStatus, Receipt, Contact } from '@/types';
 
@@ -216,6 +216,46 @@ function SplitPageContent() {
 
     return unsubscribe;
   }, [splitId, hasSentAll, publicKey]);
+
+  useEffect(() => {
+    if (!hasSentAll || !splitId) return;
+
+    const unsubscribe = subscribeToSplit(splitId, (participantId, status, txId) => {
+      setParticipants(prev => {
+        const next = [...prev];
+        // participantId from Supabase is the row id like "participant-0-timestamp"
+        // match by finding the participant whose supabase id matches
+        // since we set id as participant-{i}-{Date.now()}, we need to match by wallet
+        // The payload gives us the row, so match by wallet_address via a fresh query
+        // Instead, just refresh all from Supabase
+        return next;
+      });
+      // On any update, refresh all participant statuses from Supabase
+      getSplitDB(splitId).then(data => {
+        if (!data) return;
+        setParticipants(prev => {
+          const next = [...prev];
+          let changed = false;
+          data.participants.forEach((sp: any) => {
+            const idx = next.findIndex(p => p.walletAddress === sp.wallet_address);
+            if (idx === -1) return;
+            if (next[idx].status !== sp.status || next[idx].txId !== sp.tx_id) {
+              next[idx] = {
+                ...next[idx],
+                status: sp.status,
+                txId: sp.tx_id,
+                paidAt: sp.status === 'confirmed' ? sp.paid_at || new Date().toISOString() : next[idx].paidAt,
+              };
+              changed = true;
+            }
+          });
+          return changed ? next : prev;
+        });
+      });
+    });
+
+    return () => { unsubscribe(); };
+  }, [hasSentAll, splitId]);
 
   const total = parseFloat(totalAmount) || 0;
   const perPerson = equalSplit && participants.length > 0 ? total / participants.length : 0;
@@ -539,15 +579,12 @@ function SplitPageContent() {
     };
 
     setParticipants(results);
-    try {
-      // Save to Supabase (with localStorage fallback inside saveSplitDB)
-      await saveSplitDB(splitData);
-      setCurrentSplit(splitData);
-      setActiveSplit(splitData);
-    } catch (err) {
-      console.error('Failed to generate split links:', err);
-      alert('Failed to generate split links. See console for details.');
-    }
+    saveSplit(senderAddress, splitData);
+    saveActiveSplit(senderAddress, splitData);
+    setCurrentSplit(splitData);
+    setActiveSplit(splitData);
+    // Save to Supabase
+    saveSplitDB(splitData).catch(e => console.error('[Solvio] saveSplitDB error:', e));
   };
 
   const retryOne = (index: number) => {
