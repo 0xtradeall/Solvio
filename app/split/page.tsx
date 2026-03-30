@@ -16,7 +16,7 @@ import { saveReceipt } from '@/lib/storage';
 import { generateReceiptPDF } from '@/lib/pdf';
 import { generateSplitUrl } from '@/lib/transactions';
 import { saveSplit, updateSplitParticipantStatus, getSplits, getActiveSplit, saveActiveSplit, clearActiveSplit, SplitData } from '@/lib/storage';
-import { saveSplitDB, subscribeToSplit, getSplitDB } from '@/lib/db';
+import { saveSplitDB, getSplitDB } from '@/lib/db';
 import { APP_URL } from '@/lib/config';
 // Remove getContacts import, use localStorage directly for contacts
 import { Currency, TxStatus, Receipt, Contact } from '@/types';
@@ -219,46 +219,36 @@ function SplitPageContent() {
   }, [splitId, hasSentAll, publicKey]);
 
   useEffect(() => {
-    console.log('[Solvio] subscribeToSplit useEffect fired, splitId:', splitId, 'hasSentAll:', hasSentAll);
-    if (!splitId) return;
+    if (!splitId || !hasSentAll) return;
 
-    console.log('[Solvio] Subscribing to split:', splitId);
-    const unsubscribe = subscribeToSplit(splitId, (participantId, status, txId) => {
-      console.log('[Solvio] Realtime update received:', { participantId, status, txId });
+    console.log('[Solvio] Starting Supabase polling for split:', splitId);
+
+    const poll = async () => {
+      const data = await getSplitDB(splitId);
+      if (!data) return;
       setParticipants(prev => {
         const next = [...prev];
-        // participantId from Supabase is the row id like "participant-0-timestamp"
-        // match by finding the participant whose supabase id matches
-        // since we set id as participant-{i}-{Date.now()}, we need to match by wallet
-        // The payload gives us the row, so match by wallet_address via a fresh query
-        // Instead, just refresh all from Supabase
-        return next;
-      });
-      // On any update, refresh all participant statuses from Supabase
-      getSplitDB(splitId).then(data => {
-        if (!data) return;
-        setParticipants(prev => {
-          const next = [...prev];
-          let changed = false;
-          data.participants.forEach((sp: any) => {
-            const idx = next.findIndex(p => p.walletAddress === sp.wallet_address);
-            if (idx === -1) return;
-            if (next[idx].status !== sp.status || next[idx].txId !== sp.tx_id) {
-              next[idx] = {
-                ...next[idx],
-                status: sp.status,
-                txId: sp.tx_id,
-                paidAt: sp.status === 'confirmed' ? sp.paid_at || new Date().toISOString() : next[idx].paidAt,
-              };
-              changed = true;
-            }
-          });
-          return changed ? next : prev;
+        let changed = false;
+        data.participants.forEach((sp: any) => {
+          const idx = next.findIndex(p => p.walletAddress === sp.wallet_address);
+          if (idx === -1) return;
+          if (next[idx].status !== sp.status || next[idx].txId !== sp.tx_id) {
+            next[idx] = {
+              ...next[idx],
+              status: sp.status,
+              txId: sp.tx_id,
+              paidAt: sp.status === 'confirmed' ? sp.paid_at || new Date().toISOString() : next[idx].paidAt,
+            };
+            changed = true;
+          }
         });
+        return changed ? next : prev;
       });
-    });
+    };
 
-    return () => { unsubscribe(); };
+    poll(); // immediate first check
+    const interval = setInterval(poll, 5000);
+    return () => clearInterval(interval);
   }, [hasSentAll, splitId]);
 
   const total = parseFloat(totalAmount) || 0;
