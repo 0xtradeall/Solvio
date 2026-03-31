@@ -191,8 +191,6 @@ function SplitPageContent() {
   useEffect(() => {
     if (!splitId || !hasSentAll) return;
 
-    console.log('[Solvio] Starting Supabase polling for split:', splitId);
-
     const poll = async () => {
       const data = await getSplitDB(splitId);
       if (!data) return;
@@ -597,8 +595,6 @@ function SplitPageContent() {
     if (!senderAddress) return '';
     const baseUrl = APP_URL;
     const link = generateSplitUrl(baseUrl, splitId, participant.walletAddress, getShare(index), currency, description, senderAddress);
-    // Debug log for generated split link
-    console.log('[Solvio] Generated split link:', link);
     return link;
   };
 

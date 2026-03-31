@@ -162,16 +162,13 @@ export function subscribeToSplit(
         table: 'split_participants',
       },
       (payload) => {
-        console.log('[Solvio] Realtime payload received:', payload.new);
         const { id, split_id, status, tx_id } = payload.new as any;
         // Filter client-side
         if (split_id !== splitId) return;
         onUpdate(id, status, tx_id);
       }
     )
-    .subscribe((status) => {
-      console.log('[Solvio] Supabase channel status:', status);
-    });
+    .subscribe();
 
   return () => supabase.removeChannel(channel);
 }
