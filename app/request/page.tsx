@@ -9,7 +9,7 @@ import WalletConnectButton from '@/components/WalletConnectButton';
 import WalletConnectModal from '@/components/WalletConnectModal';
 import DevnetBanner from '@/components/DevnetBanner';
 import SnsAddressInput from '@/components/SnsAddressInput';
-import { generatePaymentUrl, pollForIncomingPayment, getTransactionExplorerUrl } from '@/lib/transactions';
+import { generatePaymentUrl, getTransactionExplorerUrl } from '@/lib/transactions';
 import { validateAmount } from '@/lib/validators';
 import { isSNSInput } from '@/lib/sns';
 import { saveReceipt } from '@/lib/storage';
@@ -35,6 +35,7 @@ export default function RequestPage() {
   const [incomingTxId, setIncomingTxId] = useState<string | null>(null);
   const [pdfGenerating, setPdfGenerating] = useState(false);
   const pollCancelRef = useRef<boolean>(false);
+  const intervalRef = useRef<NodeJS.Timeout | null>(null);
 
   const [sendToInput, setSendToInput] = useState('');
   const [resolvedSendTo, setResolvedSendTo] = useState('');
@@ -123,6 +124,7 @@ export default function RequestPage() {
     setAmountError('');
     setSendToError('');
     pollCancelRef.current = true;
+    if (intervalRef.current) clearInterval(intervalRef.current);
     setPollStatus('idle');
     setIncomingTxId(null);
 
@@ -145,41 +147,118 @@ export default function RequestPage() {
     };
     if (publicKey) saveReceipt(publicKey.toBase58(), receipt);
 
-    setTimeout(() => startPolling(parseFloat(amount), receiverAddress, receipt.id), 500);
+    setTimeout(() => startPolling(), 500);
   }, [amount, currency, note, receiverAddress, resolvedSendTo, publicKey]);
 
-  const startPolling = useCallback(async (amt: number, addr: string, receiptId: string) => {
+  const startPolling = useCallback(() => {
     pollCancelRef.current = false;
     setPollStatus('polling');
 
-  const txId = await pollForIncomingPayment(connection, addr, amt, 120000, currency);
+    const pollStart = Date.now();
+    const amt = parseFloat(amount);
+    const addr = receiverAddress;
 
-    if (pollCancelRef.current) return;
-
-    if (txId) {
-      setIncomingTxId(txId);
-      setPollStatus('received');
-      if (publicKey) {
-        const updatedReceipt: Receipt = {
-          id: receiptId,
-          type: 'request',
-          amount: amt,
-          currency,
-          date: new Date().toISOString(),
-          note,
-          fromAddress: receiverAddress,
-          toAddress: resolvedSendTo || receiverAddress,
-          txId,
-        };
-        saveReceipt(publicKey.toBase58(), updatedReceipt);
-        setPdfGenerating(true);
-        try { await generateReceiptPDF(updatedReceipt); } catch (e) { console.error('PDF error:', e); }
-        setPdfGenerating(false);
+    const checkPayment = async () => {
+      if (pollCancelRef.current) {
+        clearInterval(intervalRef.current!);
+        return;
       }
-    } else {
-      setPollStatus('timeout');
+      if (Date.now() - pollStart > 120000) {
+        clearInterval(intervalRef.current!);
+        setPollStatus('timeout');
+        return;
+      }
+
+      try {
+        const { Connection, PublicKey } = await import('@solana/web3.js');
+        const conn = new Connection('https://api.devnet.solana.com', 'confirmed');
+
+        if (currency === 'USDC') {
+          const { getAssociatedTokenAddress } = await import('@solana/spl-token');
+          const USDC_MINT = '4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU';
+          const mintPubkey = new PublicKey(USDC_MINT);
+          const toPubkey = new PublicKey(addr);
+          const receiverATA = await getAssociatedTokenAddress(mintPubkey, toPubkey);
+
+          const sigs = await conn.getSignaturesForAddress(receiverATA, { limit: 5 });
+          for (const sig of sigs) {
+            if (!sig.blockTime || sig.blockTime * 1000 < pollStart) continue;
+            const tx = await conn.getParsedTransaction(sig.signature, {
+              commitment: 'confirmed',
+              maxSupportedTransactionVersion: 0,
+            });
+            if (!tx?.meta) continue;
+            const postTokenBalances = tx.meta.postTokenBalances ?? [];
+            const preTokenBalances = tx.meta.preTokenBalances ?? [];
+            for (const post of postTokenBalances) {
+              if (post.mint !== USDC_MINT) continue;
+              // Only match positive inflow (receiver gaining tokens)
+              const pre = preTokenBalances.find(p => p.accountIndex === post.accountIndex);
+              const postAmt = Number(post.uiTokenAmount.amount) / 1e6;
+              const preAmt = pre ? Number(pre.uiTokenAmount.amount) / 1e6 : 0;
+              const delta = postAmt - preAmt;
+              if (delta > 0 && Math.abs(delta - amt) < 0.01) {
+                clearInterval(intervalRef.current!);
+                handlePaymentDetected(sig.signature);
+                return;
+              }
+            }
+          }
+        } else {
+          // SOL
+          const toPubkey = new PublicKey(addr);
+          const sigs = await conn.getSignaturesForAddress(toPubkey, { limit: 5 });
+          for (const sig of sigs) {
+            if (!sig.blockTime || sig.blockTime * 1000 < pollStart) continue;
+            const tx = await conn.getTransaction(sig.signature, {
+              commitment: 'confirmed',
+              maxSupportedTransactionVersion: 0,
+            });
+            if (!tx?.meta) continue;
+            const accounts = tx.transaction.message.getAccountKeys
+              ? tx.transaction.message.getAccountKeys().staticAccountKeys
+              : (tx.transaction.message as any).accountKeys;
+            const toIdx = accounts?.findIndex((k: any) => k?.toBase58?.() === addr);
+            if (toIdx !== undefined && toIdx >= 0) {
+              const delta = ((tx.meta.postBalances[toIdx] - tx.meta.preBalances[toIdx]) / 1e9);
+              if (delta > 0 && Math.abs(delta - amt) < 0.001) {
+                clearInterval(intervalRef.current!);
+                handlePaymentDetected(sig.signature);
+                return;
+              }
+            }
+          }
+        }
+      } catch (e) {
+        console.error('[Solvio] Poll error:', e);
+      }
+    };
+
+    intervalRef.current = setInterval(checkPayment, 5000) as any;
+    checkPayment(); // immediate first check
+  }, [amount, currency, receiverAddress, publicKey, note, resolvedSendTo]);
+
+  const handlePaymentDetected = useCallback(async (txId: string) => {
+    setIncomingTxId(txId);
+    setPollStatus('received');
+    if (publicKey) {
+      const updatedReceipt: Receipt = {
+        id: Date.now().toString(),
+        type: 'request',
+        amount: parseFloat(amount),
+        currency,
+        date: new Date().toISOString(),
+        note,
+        fromAddress: receiverAddress,
+        toAddress: resolvedSendTo || receiverAddress,
+        txId,
+      };
+      saveReceipt(publicKey.toBase58(), updatedReceipt);
+      setPdfGenerating(true);
+      try { await generateReceiptPDF(updatedReceipt); } catch (e) { console.error('PDF error:', e); }
+      setPdfGenerating(false);
     }
-  }, [connection, currency, note, receiverAddress, resolvedSendTo, publicKey]);
+  }, [amount, currency, note, receiverAddress, resolvedSendTo, publicKey]);
 
   const handleCopy = async () => {
     if (!paymentUrl) return;
@@ -492,7 +571,7 @@ export default function RequestPage() {
                   <div className="bg-gray-50 rounded-xl p-3 border border-gray-200 flex items-center justify-between">
                     <p className="text-sm text-gray-600">Detection timed out</p>
                     <button
-                      onClick={() => startPolling(parseFloat(amount), receiverAddress, Date.now().toString())}
+                      onClick={() => startPolling()}
                       className="flex items-center gap-1 text-sm text-primary-600 hover:text-primary-700 font-medium"
                     >
                       <RefreshCw size={14} />
