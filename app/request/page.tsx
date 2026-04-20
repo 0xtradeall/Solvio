@@ -13,6 +13,7 @@ import { generatePaymentUrl, getTransactionExplorerUrl } from '@/lib/transaction
 import { validateAmount } from '@/lib/validators';
 import { isSNSInput } from '@/lib/sns';
 import { saveReceipt } from '@/lib/storage';
+import { saveReceiptDB } from '@/lib/db';
 import { generateReceiptPDF } from '@/lib/pdf';
 import { Receipt, Currency, Contact } from '@/types';
 import { APP_URL } from '@/lib/config';
@@ -254,8 +255,10 @@ export default function RequestPage() {
         txId,
       };
       saveReceipt(publicKey.toBase58(), updatedReceipt);
+      saveReceiptDB(updatedReceipt, publicKey.toBase58()).catch(e => console.error('[Solvio] saveReceiptDB error:', e));
       setPdfGenerating(true);
-      try { await generateReceiptPDF(updatedReceipt); } catch (e) { console.error('PDF error:', e); }
+      console.log('[Solvio] Generating PDF for receipt:', updatedReceipt);
+      try { await generateReceiptPDF(updatedReceipt); console.log('[Solvio] PDF generated OK'); } catch (e) { console.error('[Solvio] PDF generation error:', e); }
       setPdfGenerating(false);
     }
   }, [amount, currency, note, receiverAddress, resolvedSendTo, publicKey]);
